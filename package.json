@@ -1,0 +1,25 @@
+{
+  "name": "mockflow",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '*' build",
+    "lint": "bun run --filter '*' lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "db:up": "docker compose -f infra/compose.yaml up -d",
+    "db:down": "docker compose -f infra/compose.yaml down",
+    "db:logs": "docker compose -f infra/compose.yaml logs -f postgres"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}
