@@ -53,3 +53,27 @@ source files and verified Git whitespace. Once Bun installs successfully, the
 next checks I would run are the migration against an empty PostgreSQL database,
 the integration test with `TEST_DATABASE_URL`, and the complete root quality
 suite.
+
+
+
+**## Phase 2 — core mock engine**
+
+Commit: `e689e1b` — `feat(mock-engine): implement route matcher`
+
+I started Phase 2 by implementing the route matcher inside the `packages/mock-engine` package. It handles HTTP method and path matching, including parameterized routes, route specificity, path normalization, URL parameter decoding, and validation against invalid or ambiguous route configurations. I also added comprehensive tests covering static and parameterized routes, method isolation, normalization, malformed paths, and edge cases.
+
+Commit: `b714761` — `feat(mock-engine): implement scenario resolver`
+
+Next, I implemented the scenario resolver, which determines which response scenario should be used for a matched API definition. It supports explicit scenario selection, environment-specific scenario mappings, API default scenarios, and optional fallback behavior. I added validation for missing scenarios, mismatched API or project ownership, conflicting selections, and invalid configurations. The resolver remains framework-independent and receives the scenario data from its caller rather than fetching it itself.
+
+Commit: `240942a` — `feat(mock-engine): implement response executor`
+
+I then implemented the response executor to construct mock responses with status codes, headers, bodies, and artificial delays. It validates status codes, header names and values, rejects prohibited hop-by-hop and framing headers, enforces response body size and delay limits, and includes mandatory security headers. It also handles body-forbidden HTTP statuses, safe JSON serialization, text and binary responses, and structured execution errors. Tests cover response validation, size limits, delay limits, body handling, and HTTP status-specific behavior.
+
+Commit: `58e72a5` — `feat(mock-engine): integrate unified engine`
+
+Finally, I integrated the route matcher, scenario resolver, and response executor into a unified mock engine API. The engine handles the complete flow from matching an incoming request to resolving the appropriate scenario and constructing the response. It supports request context, explicit scenario selection through request fields or headers, environment selection, configurable execution limits, structured success and failure results, and artificial response delays. I also added integration tests covering the complete execution flow, route matching failures, scenario resolution failures, response execution failures, parameter extraction, and scenario selection behavior.
+
+The main challenge during this phase was ensuring that all four components worked together while remaining independent of Fastify, database access, and other application infrastructure. I focused on route specificity, scenario selection precedence, response validation, error handling, and keeping the engine reusable for the runtime integration phase. I verified the implementation with 151 passing tests across the four test suites, along with successful TypeScript typechecking, build, and Prettier checks.
+
+The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch. 
