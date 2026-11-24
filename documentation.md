@@ -58,7 +58,7 @@ suite.
 
 Commit: `e689e1b` — `feat(mock-engine): implement route matcher`
 
-I started Phase 2 by implementing the route matcher inside the `packages/mock-engine` package. It handles HTTP method and path matching, including parameterized routes, route specificity, path normalization, URL parameter decoding, and validation against invalid or ambiguous route configurations. I also added comprehensive tests covering static and parameterized routes, method isolation, normalization, malformed paths, and edge cases.
+I started Phase 2 by implementing the route matcher inside the `packages/mock-engine` package. It handles HTTP method and path matching, including parameterized routes, route specificity, path normalization, URL parameter decoding, and validation against invalid or ambiguous route configurations. I also added tests covering static and parameterized routes, method isolation, normalization, malformed paths, and edge cases.
 
 Commit: `b714761` — `feat(mock-engine): implement scenario resolver`
 
@@ -73,5 +73,9 @@ Commit: `58e72a5` — `feat(mock-engine): integrate unified engine`
 Finally, I integrated the route matcher, scenario resolver, and response executor into a unified mock engine API. The engine handles the complete flow from matching an incoming request to resolving the appropriate scenario and constructing the response. It supports request context, explicit scenario selection through request fields or headers, environment selection, configurable execution limits, structured success and failure results, and artificial response delays. I also added integration tests covering the complete execution flow, route matching failures, scenario resolution failures, response execution failures, parameter extraction, and scenario selection behavior.
 
 The main challenge during this phase was ensuring that all four components worked together while remaining independent of Fastify, database access, and other application infrastructure. I focused on route specificity, scenario selection precedence, response validation, error handling, and keeping the engine reusable for the runtime integration phase. I verified the implementation with 151 passing tests across the four test suites, along with successful TypeScript typechecking, build, and Prettier checks.
+
+While preparing the project for GitHub Actions, I encountered a Bun version mismatch between the local environment and the CI workflow. The workflow was using Bun 1.3.14, while the lockfile was generated using a newer Bun version. This caused the dependency installation step to fail with an unknown lockfile version error. I updated the CI workflow to use Bun 1.4.5 to align it with the lockfile, which resolved that installation issue.
+
+I also encountered formatting failures during CI because several repository files did not follow the Prettier formatting rules. I ran the formatter across the repository and verified that the formatting check passed locally. During further CI verification, I found a package-resolution issue involving `@mockflow/config` in the API and runtime lint checks, which I am still investigating.
 
 The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch.
