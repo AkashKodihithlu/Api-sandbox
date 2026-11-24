@@ -54,8 +54,6 @@ next checks I would run are the migration against an empty PostgreSQL database,
 the integration test with `TEST_DATABASE_URL`, and the complete root quality
 suite.
 
-
-
 **## Phase 2 — core mock engine**
 
 Commit: `e689e1b` — `feat(mock-engine): implement route matcher`
@@ -76,4 +74,4 @@ Finally, I integrated the route matcher, scenario resolver, and response executo
 
 The main challenge during this phase was ensuring that all four components worked together while remaining independent of Fastify, database access, and other application infrastructure. I focused on route specificity, scenario selection precedence, response validation, error handling, and keeping the engine reusable for the runtime integration phase. I verified the implementation with 151 passing tests across the four test suites, along with successful TypeScript typechecking, build, and Prettier checks.
 
-The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch. 
+The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch.
