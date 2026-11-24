@@ -14,11 +14,16 @@ export function buildApp(options: AppOptions = {}) {
   app.get('/ready', async () => ({ status: 'ok' as const, service: 'control-api' }));
 
   app.setErrorHandler((error, _request, reply) => {
-    if ('code' in error && error.code === '23505') {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
       return reply.code(409).send({
-        error: { code: 'CONFLICT', message: 'A resource with these values already exists', details: [] },
+        error: {
+          code: 'CONFLICT',
+          message: 'A resource with these values already exists',
+          details: [],
+        },
       });
     }
+
     app.log.error(error);
     return reply.code(500).send({
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', details: [] },

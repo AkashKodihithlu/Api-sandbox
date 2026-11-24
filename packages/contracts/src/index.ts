@@ -24,7 +24,12 @@ export const paginationQuerySchema = z.object({
 
 export const projectCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  slug: z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .max(80),
   description: z.string().trim().max(500).optional(),
 });
 export const projectUpdateSchema = projectCreateSchema.partial().extend({

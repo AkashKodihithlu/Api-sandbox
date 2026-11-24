@@ -33,7 +33,9 @@ export const projects = pgTable(
   'projects',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 120 }).notNull(),
     slug: varchar('slug', { length: 80 }).notNull(),
     description: varchar('description', { length: 500 }),
@@ -46,8 +48,12 @@ export const projects = pgTable(
 export const projectMembers = pgTable(
   'project_members',
   {
-    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     role: projectRole('role').notNull().default('VIEWER'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -58,7 +64,9 @@ export const apiDefinitions = pgTable(
   'api_definitions',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 120 }).notNull(),
     method: httpMethod('method').notNull(),
     path: varchar('path', { length: 500 }).notNull(),
@@ -68,14 +76,22 @@ export const apiDefinitions = pgTable(
     isPublished: boolean('is_published').notNull().default(false),
     ...timestamps,
   },
-  (table) => [uniqueIndex('api_definitions_project_method_path_unique').on(table.projectId, table.method, table.path)],
+  (table) => [
+    uniqueIndex('api_definitions_project_method_path_unique').on(
+      table.projectId,
+      table.method,
+      table.path,
+    ),
+  ],
 );
 
 export const responseScenarios = pgTable(
   'response_scenarios',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    apiDefinitionId: uuid('api_definition_id').notNull().references(() => apiDefinitions.id, { onDelete: 'cascade' }),
+    apiDefinitionId: uuid('api_definition_id')
+      .notNull()
+      .references(() => apiDefinitions.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 120 }).notNull(),
     statusCode: integer('status_code').notNull(),
     headers: jsonb('headers').notNull().default({}),
@@ -84,14 +100,18 @@ export const responseScenarios = pgTable(
     isDefault: boolean('is_default').notNull().default(false),
     ...timestamps,
   },
-  (table) => [uniqueIndex('response_scenarios_api_name_unique').on(table.apiDefinitionId, table.name)],
+  (table) => [
+    uniqueIndex('response_scenarios_api_name_unique').on(table.apiDefinitionId, table.name),
+  ],
 );
 
 export const environments = pgTable(
   'environments',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 120 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -101,17 +121,27 @@ export const environments = pgTable(
 export const environmentScenarios = pgTable(
   'environment_scenarios',
   {
-    environmentId: uuid('environment_id').notNull().references(() => environments.id, { onDelete: 'cascade' }),
-    apiDefinitionId: uuid('api_definition_id').notNull().references(() => apiDefinitions.id, { onDelete: 'cascade' }),
-    scenarioId: uuid('scenario_id').notNull().references(() => responseScenarios.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environment_id')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    apiDefinitionId: uuid('api_definition_id')
+      .notNull()
+      .references(() => apiDefinitions.id, { onDelete: 'cascade' }),
+    scenarioId: uuid('scenario_id')
+      .notNull()
+      .references(() => responseScenarios.id, { onDelete: 'cascade' }),
   },
   (table) => [primaryKey({ columns: [table.environmentId, table.apiDefinitionId] })],
 );
 
 export const requestLogs = pgTable('request_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
-  apiDefinitionId: uuid('api_definition_id').references(() => apiDefinitions.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  apiDefinitionId: uuid('api_definition_id').references(() => apiDefinitions.id, {
+    onDelete: 'set null',
+  }),
   scenarioId: uuid('scenario_id').references(() => responseScenarios.id, { onDelete: 'set null' }),
   method: varchar('method', { length: 16 }).notNull(),
   path: varchar('path', { length: 500 }).notNull(),
