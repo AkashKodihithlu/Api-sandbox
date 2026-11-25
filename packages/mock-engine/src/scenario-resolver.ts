@@ -1,11 +1,7 @@
 import type { ScenarioType } from '@mockflow/contracts';
 
 export type ScenarioResolutionReason =
-  | 'explicit'
-  | 'environment'
-  | 'default'
-  | 'fallback'
-  | 'validation_error';
+  'explicit' | 'environment' | 'default' | 'fallback' | 'validation_error';
 
 export type ScenarioResolutionErrorCode =
   | 'SCENARIO_NOT_FOUND'
@@ -102,8 +98,7 @@ export interface ScenarioResolutionFailure {
 }
 
 export type ScenarioResolutionResult<TScenario extends MockScenario = MockScenario> =
-  | ScenarioResolutionSuccess<TScenario>
-  | ScenarioResolutionFailure;
+  ScenarioResolutionSuccess<TScenario> | ScenarioResolutionFailure;
 
 export class ScenarioResolutionError extends Error {
   readonly code: ScenarioResolutionErrorCode;

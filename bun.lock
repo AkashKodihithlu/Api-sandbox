@@ -6,7 +6,7 @@
       "name": "mockflow",
       "devDependencies": {
         "@types/node": "^24.10.1",
-        "prettier": "^3.5.3",
+        "prettier": "3.10.1",
         "typescript": "^5.8.3",
         "vitest": "^3.1.2",
       },
