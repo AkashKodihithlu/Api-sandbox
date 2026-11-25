@@ -12,6 +12,42 @@ declare module 'vscode' {
   export interface ExtensionContext {
     secrets: SecretStorage;
     subscriptions: { push(...items: Disposable[]): number };
+    workspaceState: Memento;
+  }
+
+  export interface Memento {
+    get<T>(key: string): T | undefined;
+    update(key: string, value: unknown): PromiseLike<void>;
+  }
+
+  export enum TreeItemCollapsibleState {
+    None = 0,
+    Collapsed = 1,
+    Expanded = 2,
+  }
+
+  export class TreeItem {
+    constructor(label: string, collapsibleState?: TreeItemCollapsibleState);
+    description?: string;
+    tooltip?: string;
+    contextValue?: string;
+    command?: { command: string; title: string; arguments?: unknown[] };
+  }
+
+  export interface TreeDataProvider<T> {
+    onDidChangeTreeData?: Event<T | undefined | void>;
+    getTreeItem(element: T): TreeItem;
+    getChildren(element?: T): T[] | PromiseLike<T[]>;
+  }
+
+  export interface Event<T> {
+    (listener: (event: T) => unknown): Disposable;
+  }
+
+  export class EventEmitter<T> implements Disposable {
+    readonly event: Event<T>;
+    fire(data?: T): void;
+    dispose(): void;
   }
 
   export const workspace: {
@@ -27,8 +63,10 @@ declare module 'vscode' {
       ignoreFocusOut?: boolean;
       validateInput?: (value: string) => string | undefined;
     }): Promise<string | undefined>;
+    showQuickPick<T extends { label: string }>(items: readonly T[], options?: { placeHolder?: string }): Promise<T | undefined>;
     showInformationMessage(message: string): Promise<unknown>;
     showErrorMessage(message: string): Promise<unknown>;
+    registerTreeDataProvider<T>(viewId: string, treeDataProvider: TreeDataProvider<T>): Disposable;
   };
 
   export const commands: {

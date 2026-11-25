@@ -11,6 +11,23 @@
     "onView:mockflow.projects"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mockflow",
+          "title": "MockFlow",
+          "icon": "$(cloud)"
+        }
+      ]
+    },
+    "views": {
+      "mockflow": [
+        {
+          "id": "mockflow.projects",
+          "name": "Projects"
+        }
+      ]
+    },
     "commands": [
       { "command": "mockflow.signIn", "title": "MockFlow: Sign In" },
       { "command": "mockflow.signOut", "title": "MockFlow: Sign Out" },
