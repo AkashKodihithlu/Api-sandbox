@@ -3,11 +3,39 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:mockflow.signIn",
+    "onCommand:mockflow.signOut",
+    "onCommand:mockflow.selectProject",
+    "onView:mockflow.projects"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "mockflow.signIn", "title": "MockFlow: Sign In" },
+      { "command": "mockflow.signOut", "title": "MockFlow: Sign Out" },
+      { "command": "mockflow.selectProject", "title": "MockFlow: Select Project" },
+      { "command": "mockflow.refresh", "title": "MockFlow: Refresh" }
+    ],
+    "configuration": {
+      "title": "MockFlow",
+      "properties": {
+        "mockflow.controlApiBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:4000",
+          "description": "Base URL for the MockFlow control-plane API."
+        }
+      }
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mockflow/contracts": "workspace:*"
   }
 }
