@@ -246,4 +246,5 @@ export function matchRoute<T extends RouteDefinition>(
 
 export * from './scenario-resolver.js';
 export * from './response-executor.js';
+export * from './request-validator.js';
 export * from './engine.js';

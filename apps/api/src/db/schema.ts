@@ -15,6 +15,16 @@ import {
 export const projectStatus = pgEnum('project_status', ['ACTIVE', 'ARCHIVED']);
 export const projectRole = pgEnum('project_role', ['OWNER', 'EDITOR', 'VIEWER']);
 export const httpMethod = pgEnum('http_method', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+export const scenarioType = pgEnum('scenario_type', [
+  'SUCCESS',
+  'EMPTY',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'VALIDATION_ERROR',
+  'SERVER_ERROR',
+  'CUSTOM',
+]);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -93,6 +103,7 @@ export const responseScenarios = pgTable(
       .notNull()
       .references(() => apiDefinitions.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 120 }).notNull(),
+    type: scenarioType('type').notNull().default('CUSTOM'),
     statusCode: integer('status_code').notNull(),
     headers: jsonb('headers').notNull().default({}),
     body: jsonb('body'),

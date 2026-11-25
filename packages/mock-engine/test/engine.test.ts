@@ -674,4 +674,254 @@ describe('Unified MockEngine Integration', () => {
       expect(sleeperSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('Phase 3: Named scenario types and JSON Schema request validation', () => {
+    const validatedRoute: MockEngineRoute = {
+      id: 'api-orders-create',
+      projectId: 'proj-1',
+      method: 'POST',
+      path: '/api/v1/orders',
+      defaultScenarioId: 'sc-order-success',
+      requestSchema: {
+        type: 'object',
+        required: ['itemId', 'quantity'],
+        additionalProperties: false,
+        properties: {
+          itemId: { type: 'string', minLength: 1 },
+          quantity: { type: 'integer', minimum: 1 },
+        },
+      },
+      scenarios: [
+        {
+          id: 'sc-order-success',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Order Created',
+          type: 'SUCCESS',
+          statusCode: 201,
+          body: { orderId: 'ord-1' },
+          isDefault: true,
+        },
+        {
+          id: 'sc-order-empty',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Empty',
+          type: 'EMPTY',
+          statusCode: 204,
+          body: null,
+        },
+        {
+          id: 'sc-order-unauth',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Unauthorized',
+          type: 'UNAUTHORIZED',
+          statusCode: 401,
+          body: { error: 'Unauthorized' },
+        },
+        {
+          id: 'sc-order-forbidden',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Forbidden',
+          type: 'FORBIDDEN',
+          statusCode: 403,
+          body: { error: 'Forbidden' },
+        },
+        {
+          id: 'sc-order-not-found',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Not Found',
+          type: 'NOT_FOUND',
+          statusCode: 404,
+          body: { error: 'Item not found' },
+        },
+        {
+          id: 'sc-order-validation',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Validation Error',
+          type: 'VALIDATION_ERROR',
+          statusCode: 422,
+          headers: { 'x-validation': 'failed' },
+          body: { error: 'Invalid order payload' },
+        },
+        {
+          id: 'sc-order-server-error',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Server Error',
+          type: 'SERVER_ERROR',
+          statusCode: 500,
+          body: { error: 'Internal failure' },
+        },
+        {
+          id: 'sc-order-custom',
+          apiDefinitionId: 'api-orders-create',
+          projectId: 'proj-1',
+          name: 'Rate Limited Custom',
+          type: 'CUSTOM',
+          statusCode: 429,
+          body: { retryAfter: 60 },
+        },
+      ],
+    };
+
+    it('supports all named scenario types without overriding configured status or body', () => {
+      const engine = createMockEngine({ routes: [validatedRoute] });
+
+      const expected = [
+        { id: 'sc-order-success', status: 201 },
+        { id: 'sc-order-empty', status: 204 },
+        { id: 'sc-order-unauth', status: 401 },
+        { id: 'sc-order-forbidden', status: 403 },
+        { id: 'sc-order-not-found', status: 404 },
+        { id: 'sc-order-validation', status: 422 },
+        { id: 'sc-order-server-error', status: 500 },
+        { id: 'sc-order-custom', status: 429 },
+      ];
+
+      for (const item of expected) {
+        const result = engine.execute({
+          method: 'POST',
+          path: '/api/v1/orders',
+          explicitScenarioId: item.id,
+          body: { itemId: 'sku-1', quantity: 2 },
+        });
+        expect(result.status).toBe('MATCHED');
+        if (result.status === 'MATCHED') {
+          expect(result.scenario.id).toBe(item.id);
+          expect(result.response.statusCode).toBe(item.status);
+        }
+      }
+    });
+
+    it('proceeds to normal resolution when request body satisfies requestSchema', () => {
+      const engine = createMockEngine({
+        routes: [validatedRoute],
+        environmentScenarios: { 'api-orders-create': 'sc-order-custom' },
+      });
+
+      const result = engine.execute({
+        method: 'POST',
+        path: '/api/v1/orders',
+        body: { itemId: 'sku-1', quantity: 3 },
+      });
+
+      expect(result.status).toBe('MATCHED');
+      if (result.status === 'MATCHED') {
+        expect(result.scenario.id).toBe('sc-order-custom');
+        expect(result.resolutionReason).toBe('environment');
+        expect(result.validationIssues).toBeUndefined();
+      }
+    });
+
+    it('selects VALIDATION_ERROR scenario deterministically on invalid request body, ignoring environment/default', () => {
+      const engine = createMockEngine({
+        routes: [validatedRoute],
+        environmentScenarios: { 'api-orders-create': 'sc-order-custom' },
+      });
+
+      const result = engine.execute({
+        method: 'POST',
+        path: '/api/v1/orders',
+        body: { itemId: '', quantity: 0 },
+      });
+
+      expect(result.status).toBe('MATCHED');
+      if (result.status === 'MATCHED') {
+        expect(result.scenario.id).toBe('sc-order-validation');
+        expect(result.resolutionReason).toBe('validation_error');
+        expect(result.response.statusCode).toBe(422);
+        expect(result.response.headers['x-validation']).toBe('failed');
+        expect(result.validationIssues?.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('returns REQUEST_VALIDATION_FAILED when body is invalid and no VALIDATION_ERROR scenario exists', () => {
+      const routeWithoutValScenario: MockEngineRoute = {
+        ...validatedRoute,
+        scenarios: validatedRoute.scenarios.filter((s) => s.type !== 'VALIDATION_ERROR'),
+      };
+
+      const engine = createMockEngine({ routes: [routeWithoutValScenario] });
+
+      const result = engine.execute({
+        method: 'POST',
+        path: '/api/v1/orders',
+        body: { unexpected: true },
+      });
+
+      expect(result.status).toBe('REQUEST_VALIDATION_FAILED');
+      expect(result.matched).toBe(true);
+      if (result.status === 'REQUEST_VALIDATION_FAILED') {
+        expect(result.error.code).toBe('INVALID_REQUEST_BODY');
+        expect(result.error.issues.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('allows explicit scenario override even when request body would fail validation', () => {
+      const engine = createMockEngine({ routes: [validatedRoute] });
+
+      const result = engine.execute({
+        method: 'POST',
+        path: '/api/v1/orders',
+        explicitScenarioId: 'sc-order-server-error',
+        body: {},
+      });
+
+      expect(result.status).toBe('MATCHED');
+      if (result.status === 'MATCHED') {
+        expect(result.scenario.id).toBe('sc-order-server-error');
+        expect(result.resolutionReason).toBe('explicit');
+      }
+    });
+
+    it('rejects oversized request bodies cleanly with REQUEST_VALIDATION_FAILED', () => {
+      const engine = createMockEngine({
+        routes: [validatedRoute],
+        requestValidation: { maxBodyBytes: 20 },
+      });
+
+      const result = engine.execute({
+        method: 'POST',
+        path: '/api/v1/orders',
+        body: { itemId: 'very-long-item-identifier', quantity: 1 },
+      });
+
+      expect(result.status).toBe('REQUEST_VALIDATION_FAILED');
+      if (result.status === 'REQUEST_VALIDATION_FAILED') {
+        expect(result.error.code).toBe('REQUEST_BODY_TOO_LARGE');
+      }
+    });
+
+    it('preserves validation issues in MockEngineError when executeOrThrow fails on REQUEST_VALIDATION_FAILED', () => {
+      const routeWithoutValScenario: MockEngineRoute = {
+        ...validatedRoute,
+        scenarios: validatedRoute.scenarios.filter((s) => s.type !== 'VALIDATION_ERROR'),
+      };
+
+      const engine = createMockEngine({ routes: [routeWithoutValScenario] });
+
+      let caught: unknown;
+      try {
+        engine.executeOrThrow({
+          method: 'POST',
+          path: '/api/v1/orders',
+          body: { itemId: '', quantity: 0 },
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(MockEngineError);
+      const engineErr = caught as MockEngineError;
+      expect(engineErr.status).toBe('REQUEST_VALIDATION_FAILED');
+      expect(engineErr.code).toBe('INVALID_REQUEST_BODY');
+      expect(Array.isArray(engineErr.details?.issues)).toBe(true);
+      expect((engineErr.details?.issues as unknown[]).length).toBeGreaterThan(0);
+    });
+  });
 });

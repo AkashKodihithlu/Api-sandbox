@@ -1,0 +1,13 @@
+CREATE TYPE scenario_type AS ENUM (
+  'SUCCESS',
+  'EMPTY',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'VALIDATION_ERROR',
+  'SERVER_ERROR',
+  'CUSTOM'
+);
+
+ALTER TABLE response_scenarios
+  ADD COLUMN type scenario_type NOT NULL DEFAULT 'CUSTOM';

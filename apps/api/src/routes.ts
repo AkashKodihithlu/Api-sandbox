@@ -12,6 +12,7 @@ import {
   projectUpdateSchema,
   scenarioCreateSchema,
   scenarioUpdateSchema,
+  validateScenarioConfiguration,
 } from '@mockflow/contracts';
 import { requireUser, hashPassword, verifyPassword } from './auth.js';
 import type { Database } from './db/client.js';
@@ -367,6 +368,22 @@ export async function registerControlPlaneRoutes(app: FastifyInstance, { db }: R
       return input
         ? sendError(reply, 400, 'VALIDATION_ERROR', 'Supply at least one field')
         : undefined;
+    const mergedConfiguration = {
+      statusCode: input.statusCode ?? scenario.statusCode,
+      headers: input.headers ?? (scenario.headers as Record<string, string>),
+      body: input.body !== undefined ? input.body : scenario.body,
+      delayMs: input.delayMs ?? scenario.delayMs,
+    };
+    const configurationIssues = validateScenarioConfiguration(mergedConfiguration);
+    if (configurationIssues.length > 0) {
+      return sendError(
+        reply,
+        400,
+        'VALIDATION_ERROR',
+        'The supplied scenario configuration is invalid',
+        configurationIssues,
+      );
+    }
     if (input.isDefault)
       await db
         .update(responseScenarios)
