@@ -3,10 +3,14 @@ import jwt from '@fastify/jwt';
 import type { Database } from './db/client.js';
 import { registerControlPlaneRoutes } from './routes.js';
 
-export type AppOptions = { db?: Database; authSecret?: string };
+export type AppOptions = { db?: Database; authSecret?: string; onClose?: () => Promise<unknown> };
 
 export function buildApp(options: AppOptions = {}) {
   const app = Fastify({ logger: false });
+
+  if (options.onClose) {
+    app.addHook('onClose', options.onClose);
+  }
 
   app.register(jwt, { secret: options.authSecret ?? 'test-secret-that-is-long-enough' });
 

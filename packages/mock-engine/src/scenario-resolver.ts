@@ -1,4 +1,7 @@
-export type ScenarioResolutionReason = 'explicit' | 'environment' | 'default' | 'fallback';
+import type { ScenarioType } from '@mockflow/contracts';
+
+export type ScenarioResolutionReason =
+  'explicit' | 'environment' | 'default' | 'fallback' | 'validation_error';
 
 export type ScenarioResolutionErrorCode =
   | 'SCENARIO_NOT_FOUND'
@@ -10,6 +13,7 @@ export type ScenarioResolutionErrorCode =
 export interface MockScenario {
   id: string;
   name: string;
+  type?: ScenarioType;
   statusCode: number;
   apiDefinitionId?: string;
   projectId?: string;
@@ -25,6 +29,7 @@ export interface MockApiDefinition {
   name?: string;
   method?: string;
   path?: string;
+  requestSchema?: Record<string, unknown> | null;
   defaultScenarioId?: string | null;
   isPublished?: boolean;
 }
@@ -146,6 +151,58 @@ function validateScenarioOwnership<TScenario extends MockScenario, TApi extends 
   }
 
   return null;
+}
+
+/**
+ * Deterministically selects a VALIDATION_ERROR scenario for an API when request
+ * validation fails. Ignores ordinary environment/default overrides so that invalid
+ * requests consistently trigger validation-error behavior.
+ */
+export function resolveValidationErrorScenario<
+  TScenario extends MockScenario = MockScenario,
+  TApi extends MockApiDefinition = MockApiDefinition,
+>(api: TApi, scenarios: TScenario[]): ScenarioResolutionResult<TScenario> {
+  if (!scenarios || scenarios.length === 0) {
+    return {
+      success: false,
+      error: {
+        code: 'NO_SCENARIOS_AVAILABLE',
+        message: `No scenarios configured for API "${api.id ?? api.path ?? 'unknown'}".`,
+        details: { apiId: api.id },
+      },
+    };
+  }
+
+  const candidates = scenarios.filter((s) => s.type === 'VALIDATION_ERROR');
+  if (candidates.length === 0) {
+    return {
+      success: false,
+      error: {
+        code: 'SCENARIO_NOT_FOUND',
+        message: `No VALIDATION_ERROR scenario configured for API "${api.id ?? api.path ?? 'unknown'}".`,
+        details: { apiId: api.id, requiredType: 'VALIDATION_ERROR' },
+      },
+    };
+  }
+
+  // Deterministic tie-breaking: prefer default scenario if it is a VALIDATION_ERROR,
+  // otherwise sort deterministically by id.
+  const sorted = [...candidates].sort((a, b) => a.id.localeCompare(b.id));
+  const selected =
+    candidates.find((s) => s.id === api.defaultScenarioId) ??
+    candidates.find((s) => s.isDefault === true) ??
+    sorted[0];
+
+  const ownershipError = validateScenarioOwnership(selected, api);
+  if (ownershipError) {
+    return ownershipError;
+  }
+
+  return {
+    success: true,
+    scenario: selected,
+    reason: 'validation_error',
+  };
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   resolveScenario,
   resolveScenarioResult,
   resolveScenarioWithReason,
+  resolveValidationErrorScenario,
   ScenarioResolutionError,
   type MockApiDefinition,
   type MockScenario,
@@ -605,6 +606,58 @@ describe('Scenario Resolver', () => {
           expect(notFoundResolution.scenario.statusCode).toBe(404);
           expect(notFoundResolution.reason).toBe('explicit');
         }
+      }
+    });
+  });
+
+  describe('Validation error scenario resolution', () => {
+    it('selects VALIDATION_ERROR scenario deterministically and enforces API ownership', () => {
+      const valB: MockScenario = {
+        id: 'sc-val-b',
+        apiDefinitionId: api1.id,
+        projectId: api1.projectId,
+        name: 'Validation B',
+        type: 'VALIDATION_ERROR',
+        statusCode: 400,
+      };
+      const valA: MockScenario = {
+        id: 'sc-val-a',
+        apiDefinitionId: api1.id,
+        projectId: api1.projectId,
+        name: 'Validation A',
+        type: 'VALIDATION_ERROR',
+        statusCode: 422,
+      };
+
+      const result = resolveValidationErrorScenario(api1, [scenarioSuccess, valB, valA]);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.scenario.id).toBe('sc-val-a');
+        expect(result.reason).toBe('validation_error');
+      }
+    });
+
+    it('rejects VALIDATION_ERROR scenario belonging to a different API', () => {
+      const foreignVal: MockScenario = {
+        id: 'sc-val-foreign',
+        apiDefinitionId: 'other-api',
+        name: 'Foreign Validation',
+        type: 'VALIDATION_ERROR',
+        statusCode: 400,
+      };
+
+      const result = resolveValidationErrorScenario(api1, [foreignVal]);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe('SCENARIO_MISMATCH');
+      }
+    });
+
+    it('returns SCENARIO_NOT_FOUND when no VALIDATION_ERROR scenario is configured', () => {
+      const result = resolveValidationErrorScenario(api1, standardScenarios);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.code).toBe('SCENARIO_NOT_FOUND');
       }
     });
   });

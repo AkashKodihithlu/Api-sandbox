@@ -1,11 +1,19 @@
 import { compileRoutes, type RouteDefinition, type RouteMatch } from './index.js';
 import {
   resolveScenarioResult,
+  resolveValidationErrorScenario,
   type MockApiDefinition,
   type MockScenario,
   type ScenarioResolutionErrorCode,
   type ScenarioResolutionReason,
+  type ScenarioResolutionResult,
 } from './scenario-resolver.js';
+import {
+  validateRequestBody,
+  type RequestValidationErrorCode,
+  type RequestValidationIssue,
+  type RequestValidationOptions,
+} from './request-validator.js';
 import {
   executeMockResponseResult,
   type ExecuteResponseOptions,
@@ -55,7 +63,11 @@ export interface MockEngineRequest {
 }
 
 export type MockExecutionStatus =
-  'MATCHED' | 'ROUTE_NOT_FOUND' | 'SCENARIO_RESOLUTION_FAILED' | 'RESPONSE_EXECUTION_FAILED';
+  | 'MATCHED'
+  | 'ROUTE_NOT_FOUND'
+  | 'REQUEST_VALIDATION_FAILED'
+  | 'SCENARIO_RESOLUTION_FAILED'
+  | 'RESPONSE_EXECUTION_FAILED';
 
 export interface MockExecutionSuccess<
   TRoute extends MockEngineRoute = MockEngineRoute,
@@ -68,6 +80,7 @@ export interface MockExecutionSuccess<
   scenario: TScenario;
   resolutionReason: ScenarioResolutionReason;
   response: MockResponse;
+  validationIssues?: RequestValidationIssue[];
 }
 
 export interface MockExecutionRouteNotFound {
@@ -80,6 +93,20 @@ export interface MockExecutionRouteNotFound {
       method: string;
       path: string;
     };
+  };
+}
+
+export interface MockExecutionRequestValidationFailed<
+  TRoute extends MockEngineRoute = MockEngineRoute,
+> {
+  status: 'REQUEST_VALIDATION_FAILED';
+  matched: true;
+  route: TRoute;
+  params: Record<string, string>;
+  error: {
+    code: RequestValidationErrorCode;
+    message: string;
+    issues: RequestValidationIssue[];
   };
 }
 
@@ -118,6 +145,7 @@ export type MockExecutionResult<
 > =
   | MockExecutionSuccess<TRoute, TScenario>
   | MockExecutionRouteNotFound
+  | MockExecutionRequestValidationFailed<TRoute>
   | MockExecutionScenarioFailed<TRoute>
   | MockExecutionResponseFailed<TRoute, TScenario>;
 
@@ -137,6 +165,11 @@ export interface MockExecutionOptions extends ExecuteResponseOptions {
    * environment, or default scenario is configured.
    */
   allowFallback?: boolean;
+
+  /**
+   * Optional limits/settings for JSON Schema request body validation.
+   */
+  requestValidation?: RequestValidationOptions;
 }
 
 export interface MockEngineOptions<
@@ -191,6 +224,7 @@ export class MockEngine<
       allowFallback: options.allowFallback ?? false,
       maxBodyBytes: options.maxBodyBytes,
       maxDelayMs: options.maxDelayMs,
+      requestValidation: options.requestValidation,
     };
   }
 
@@ -267,17 +301,80 @@ export class MockEngine<
 
     const allowFallback = options?.allowFallback ?? this.defaultOptions.allowFallback ?? false;
 
-    // Step 3: Scenario Resolution
-    const scenarioResult = resolveScenarioResult<TScenario, TRoute>({
-      api: match.route,
-      scenarios: match.route.scenarios as TScenario[],
-      explicitScenarioId,
-      explicitScenarioName,
-      environmentScenarioId,
-      environmentScenarios,
-      environmentId,
-      allowFallback,
-    });
+    const hasExplicitOverride =
+      (typeof explicitScenarioId === 'string' && explicitScenarioId.trim().length > 0) ||
+      (typeof explicitScenarioName === 'string' && explicitScenarioName.trim().length > 0);
+
+    // Step 3: Optional JSON Schema Request Validation & Scenario Resolution
+    let scenarioResult: ScenarioResolutionResult<TScenario>;
+    let validationIssues: RequestValidationIssue[] | undefined;
+
+    if (!hasExplicitOverride && match.route.requestSchema) {
+      const validation = validateRequestBody(
+        request.body,
+        match.route.requestSchema,
+        options?.requestValidation ?? this.defaultOptions.requestValidation,
+      );
+
+      if (!validation.valid) {
+        if (validation.code === 'INVALID_REQUEST_BODY') {
+          const valScenarioResult = resolveValidationErrorScenario<TScenario, TRoute>(
+            match.route,
+            match.route.scenarios as TScenario[],
+          );
+          if (valScenarioResult.success) {
+            scenarioResult = valScenarioResult;
+            validationIssues = validation.issues;
+          } else {
+            return {
+              status: 'REQUEST_VALIDATION_FAILED',
+              matched: true,
+              route: match.route,
+              params: match.params,
+              error: {
+                code: validation.code,
+                message: validation.message,
+                issues: validation.issues,
+              },
+            };
+          }
+        } else {
+          return {
+            status: 'REQUEST_VALIDATION_FAILED',
+            matched: true,
+            route: match.route,
+            params: match.params,
+            error: {
+              code: validation.code,
+              message: validation.message,
+              issues: validation.issues,
+            },
+          };
+        }
+      } else {
+        scenarioResult = resolveScenarioResult<TScenario, TRoute>({
+          api: match.route,
+          scenarios: match.route.scenarios as TScenario[],
+          explicitScenarioId,
+          explicitScenarioName,
+          environmentScenarioId,
+          environmentScenarios,
+          environmentId,
+          allowFallback,
+        });
+      }
+    } else {
+      scenarioResult = resolveScenarioResult<TScenario, TRoute>({
+        api: match.route,
+        scenarios: match.route.scenarios as TScenario[],
+        explicitScenarioId,
+        explicitScenarioName,
+        environmentScenarioId,
+        environmentScenarios,
+        environmentId,
+        allowFallback,
+      });
+    }
 
     if (!scenarioResult.success) {
       return {
@@ -326,6 +423,7 @@ export class MockEngine<
       scenario: scenarioResult.scenario,
       resolutionReason: scenarioResult.reason,
       response: responseResult.response,
+      ...(validationIssues ? { validationIssues } : {}),
     };
   }
 
@@ -340,12 +438,13 @@ export class MockEngine<
     const result = this.execute(request, options);
 
     if (result.status !== 'MATCHED') {
-      throw new MockEngineError(
-        result.status,
-        result.error.code,
-        result.error.message,
-        'details' in result.error ? result.error.details : undefined,
-      );
+      const details =
+        'details' in result.error
+          ? result.error.details
+          : 'issues' in result.error
+            ? { issues: result.error.issues }
+            : undefined;
+      throw new MockEngineError(result.status, result.error.code, result.error.message, details);
     }
 
     return result;
