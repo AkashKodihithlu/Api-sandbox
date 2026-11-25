@@ -79,3 +79,23 @@ While preparing the project for GitHub Actions, I encountered a Bun version mism
 I also encountered formatting failures during CI because several repository files did not follow the Prettier formatting rules. I ran the formatter across the repository and verified that the formatting check passed locally. During further CI verification, I found a package-resolution issue involving `@mockflow/config` in the API and runtime lint checks, which I am still investigating.
 
 The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch.
+
+
+
+**## Phase 3 — scenarios and request validation**
+
+Commit: `c8a3bba` — `feat: add phase 3 scenario validation`
+
+In Phase 3, I extended the MockFlow contracts, control-plane API, and mock engine to support typed response scenarios and request-schema validation. I introduced additional scenario types and updated the database schema and migration to accommodate the new scenario configuration.
+
+I implemented request validation in the mock engine using a bounded JSON Schema subset. The validator supports validating incoming request bodies against configured schemas, including structural constraints, supported schema keywords, references, nested validation, and structured validation issue reporting. I also integrated request validation into the unified engine execution flow so that invalid requests can produce structured validation failures and resolve to dedicated validation-error scenarios where configured.
+
+On the control-plane side, I extended scenario management and validation logic. Scenario configurations are validated when saved, and PATCH operations validate the merged configuration rather than only the fields included in the incoming update. This helps prevent partial updates from leaving scenario configurations in an invalid state. I also added the database migration and updated the API tests to cover scenario persistence, validation behavior, and server lifecycle handling.
+
+A significant part of this phase involved implementing safe regular-expression validation and execution for schema-related validation rules. Instead of relying directly on potentially unsafe regular-expression execution, I implemented a bounded regex engine based on a Thompson NFA approach. This includes restrictions on unsupported syntax, execution budgets, and resource limits to reduce the risk of catastrophic backtracking and excessive resource consumption. I also added tests covering supported syntax, invalid patterns, edge cases, and resource limits.
+
+The main challenge during this phase was implementing validation that was expressive enough to support useful request-schema constraints while remaining bounded and safe. I also focused on ensuring that validation was consistent across the contracts package, control-plane API, and mock engine, while preserving the existing route matching, scenario resolution, and response execution behavior.
+
+I verified the implementation with 177 passing mock-engine tests, 26 passing contracts tests, and the API test suite with 5 passing tests and 2 skipped tests. I also ran the complete workspace TypeScript typecheck and build successfully. The complete monorepo test suite passed, with tests requiring dedicated integration-test configuration skipped where applicable.
+
+The implementation was committed as `c8a3bba` on the `feat/phase-3-scenarios-validation` branch and pushed to my fork, `AkashKodihithlu/Api-sandbox`.
