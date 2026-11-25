@@ -42,6 +42,7 @@
       "name": "@mockflow/vscode-extension",
       "version": "0.1.0",
       "dependencies": {
+        "@mockflow/api-discovery": "workspace:*",
         "@mockflow/contracts": "workspace:*",
       },
     },

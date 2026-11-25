@@ -40,6 +40,13 @@ export interface SessionResponse {
   token: string;
 }
 
+export interface ApiDefinitionDraft {
+  name: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  description?: string;
+}
+
 interface ApiEnvelope<T> {
   data: T;
   pagination?: { page: number; pageSize: number; total: number };
@@ -93,6 +100,13 @@ export class ControlPlaneClient {
 
   async listScenarios(apiId: string): Promise<ScenarioSummary[]> {
     return this.request<ScenarioSummary[]>(`/v1/apis/${encodeURIComponent(apiId)}/scenarios`);
+  }
+
+  async createApi(projectId: string, draft: ApiDefinitionDraft): Promise<ApiDefinitionSummary> {
+    return this.request<ApiDefinitionSummary>(
+      `/v1/projects/${encodeURIComponent(projectId)}/apis`,
+      { method: 'POST', body: draft },
+    );
   }
 
   private async request<T>(

@@ -15,6 +15,8 @@ declare module 'vscode' {
     workspaceState: Memento;
   }
 
+  export interface Uri { fsPath: string }
+
   export interface Memento {
     get<T>(key: string): T | undefined;
     update(key: string, value: unknown): PromiseLike<void>;
@@ -51,6 +53,7 @@ declare module 'vscode' {
   }
 
   export const workspace: {
+    workspaceFolders: readonly { uri: Uri }[] | undefined;
     getConfiguration(section?: string): {
       get<T>(section: string, defaultValue?: T): T;
     };
@@ -59,6 +62,7 @@ declare module 'vscode' {
   export const window: {
     showInputBox(options?: {
       prompt?: string;
+      value?: string;
       password?: boolean;
       ignoreFocusOut?: boolean;
       validateInput?: (value: string) => string | undefined;
@@ -66,6 +70,7 @@ declare module 'vscode' {
     showQuickPick<T extends { label: string }>(items: readonly T[], options?: { placeHolder?: string }): Promise<T | undefined>;
     showInformationMessage(message: string): Promise<unknown>;
     showErrorMessage(message: string): Promise<unknown>;
+    showWarningMessage(message: string): Promise<unknown>;
     registerTreeDataProvider<T>(viewId: string, treeDataProvider: TreeDataProvider<T>): Disposable;
   };
 
