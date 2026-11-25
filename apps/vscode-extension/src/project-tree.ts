@@ -24,7 +24,9 @@ export class MockFlowTreeItem extends vscode.TreeItem {
 }
 
 export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTreeItem> {
-  private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<MockFlowTreeItem | undefined>();
+  private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<
+    MockFlowTreeItem | undefined
+  >();
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
   constructor(
@@ -51,7 +53,8 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
 
     try {
       const projects = await this.createClient().listProjects();
-      if (projects.length === 0) return [new MockFlowTreeItem('message', 'No MockFlow projects found.')];
+      if (projects.length === 0)
+        return [new MockFlowTreeItem('message', 'No MockFlow projects found.')];
 
       const selectedId = this.projectSelection.getCurrentProjectId();
       return projects.map((project) => {
@@ -66,7 +69,11 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
         item.description = project.id === selectedId ? 'current project' : project.slug;
         item.tooltip = `${project.name} (${project.role.toLowerCase()})`;
         item.contextValue = 'mockflow.project';
-        item.command = { command: 'mockflow.selectProject', title: 'Select Project', arguments: [project] };
+        item.command = {
+          command: 'mockflow.selectProject',
+          title: 'Select Project',
+          arguments: [project],
+        };
         return item;
       });
     } catch (error) {
@@ -83,14 +90,23 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
           this.createClient().listEnvironments(project.id),
         ]);
         const apiNodes = apis.map((api) => {
-          const item = new MockFlowTreeItem('api', `${api.method} ${api.path}`, api, vscode.TreeItemCollapsibleState.Collapsed);
+          const item = new MockFlowTreeItem(
+            'api',
+            `${api.method} ${api.path}`,
+            api,
+            vscode.TreeItemCollapsibleState.Collapsed,
+          );
           item.description = api.isPublished ? 'published' : 'draft';
           item.tooltip = api.name;
           item.contextValue = 'mockflow.api';
           return item;
         });
         const environmentNodes = environments.map((environment) => {
-          const item = new MockFlowTreeItem('environment', `Environment: ${environment.name}`, environment);
+          const item = new MockFlowTreeItem(
+            'environment',
+            `Environment: ${environment.name}`,
+            environment,
+          );
           item.contextValue = 'mockflow.environment';
           return item;
         });
@@ -100,7 +116,8 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
       if (element.kind === 'api') {
         const api = element.value as ApiDefinitionSummary;
         const scenarios = await this.createClient().listScenarios(api.id);
-        if (scenarios.length === 0) return [new MockFlowTreeItem('message', 'No scenarios configured.')];
+        if (scenarios.length === 0)
+          return [new MockFlowTreeItem('message', 'No scenarios configured.')];
         return scenarios.map((scenario) => {
           const item = new MockFlowTreeItem('scenario', scenario.name, scenario);
           item.description = `${scenario.statusCode}${scenario.isDefault ? ' · default' : ''}`;
@@ -115,7 +132,8 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
   }
 
   private errorItem(error: unknown): MockFlowTreeItem {
-    const message = error instanceof ControlPlaneError ? error.message : 'Could not load MockFlow data.';
+    const message =
+      error instanceof ControlPlaneError ? error.message : 'Could not load MockFlow data.';
     const item = new MockFlowTreeItem('message', message);
     item.command = { command: 'mockflow.refresh', title: 'Refresh' };
     return item;

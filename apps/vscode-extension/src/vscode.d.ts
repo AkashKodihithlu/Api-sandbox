@@ -15,7 +15,9 @@ declare module 'vscode' {
     workspaceState: Memento;
   }
 
-  export interface Uri { fsPath: string }
+  export interface Uri {
+    fsPath: string;
+  }
 
   export interface Memento {
     get<T>(key: string): T | undefined;
@@ -67,7 +69,10 @@ declare module 'vscode' {
       ignoreFocusOut?: boolean;
       validateInput?: (value: string) => string | undefined;
     }): Promise<string | undefined>;
-    showQuickPick<T extends { label: string }>(items: readonly T[], options?: { placeHolder?: string }): Promise<T | undefined>;
+    showQuickPick<T extends { label: string }>(
+      items: readonly T[],
+      options?: { placeHolder?: string },
+    ): Promise<T | undefined>;
     showInformationMessage(message: string): Promise<unknown>;
     showErrorMessage(message: string): Promise<unknown>;
     showWarningMessage(message: string): Promise<unknown>;

@@ -21,7 +21,11 @@ function createClient(authentication: AuthenticationService): ControlPlaneClient
 export function activate(context: vscode.ExtensionContext): void {
   const authentication = new AuthenticationService(context.secrets);
   const projectSelection = new ProjectSelectionService(context.workspaceState);
-  const tree = new MockFlowTreeProvider(authentication, () => createClient(authentication), projectSelection);
+  const tree = new MockFlowTreeProvider(
+    authentication,
+    () => createClient(authentication),
+    projectSelection,
+  );
   const discoveryReview = new DiscoveryReviewService();
   const discoveryTree = new DiscoveryTreeProvider(discoveryReview);
 
@@ -30,7 +34,8 @@ export function activate(context: vscode.ExtensionContext): void {
       const email = await vscode.window.showInputBox({
         prompt: 'MockFlow email',
         ignoreFocusOut: true,
-        validateInput: (value) => (value.includes('@') ? undefined : 'Enter a valid email address.'),
+        validateInput: (value) =>
+          value.includes('@') ? undefined : 'Enter a valid email address.',
       });
       if (!email) return;
       const password = await vscode.window.showInputBox({
@@ -45,7 +50,8 @@ export function activate(context: vscode.ExtensionContext): void {
         tree.refresh();
         void vscode.window.showInformationMessage(`Signed in to MockFlow as ${user.email}.`);
       } catch (error) {
-        const message = error instanceof ControlPlaneError ? error.message : 'Could not sign in to MockFlow.';
+        const message =
+          error instanceof ControlPlaneError ? error.message : 'Could not sign in to MockFlow.';
         void vscode.window.showErrorMessage(message);
       }
     }),
@@ -60,17 +66,20 @@ export function activate(context: vscode.ExtensionContext): void {
         let selection = project;
         if (!selection) {
           const projects = await createClient(authentication).listProjects();
-          selection = await vscode.window.showQuickPick(
-            projects.map((item) => ({ label: item.name, description: item.slug, project: item })),
-            { placeHolder: 'Select a MockFlow project for this workspace' },
-          ).then((item) => item?.project);
+          selection = await vscode.window
+            .showQuickPick(
+              projects.map((item) => ({ label: item.name, description: item.slug, project: item })),
+              { placeHolder: 'Select a MockFlow project for this workspace' },
+            )
+            .then((item) => item?.project);
         }
         if (!selection) return;
         await projectSelection.selectProject(selection.id);
         tree.refresh();
         void vscode.window.showInformationMessage(`MockFlow project set to ${selection.name}.`);
       } catch (error) {
-        const message = error instanceof ControlPlaneError ? error.message : 'Could not load MockFlow projects.';
+        const message =
+          error instanceof ControlPlaneError ? error.message : 'Could not load MockFlow projects.';
         void vscode.window.showErrorMessage(message);
       }
     }),
@@ -79,13 +88,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('mockflow.scanWorkspace', async () => {
       const workspace = vscode.workspace.workspaceFolders?.[0];
       if (!workspace) {
-        void vscode.window.showWarningMessage('Open a workspace folder before scanning for API calls.');
+        void vscode.window.showWarningMessage(
+          'Open a workspace folder before scanning for API calls.',
+        );
         return;
       }
       try {
         await discoveryReview.scan(workspace.uri.fsPath);
         discoveryTree.refresh();
-        void vscode.window.showInformationMessage(`${discoveryReview.visibleGroups().length} API discovery group(s) found locally.`);
+        void vscode.window.showInformationMessage(
+          `${discoveryReview.visibleGroups().length} API discovery group(s) found locally.`,
+        );
       } catch {
         void vscode.window.showErrorMessage('Could not scan this workspace for API calls.');
       }
@@ -112,14 +125,20 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       if (action.value === 'create' && (!group.path || group.certainty !== 'static')) {
-        void vscode.window.showWarningMessage('Dynamic discoveries must be edited into a static path before creating a draft.');
+        void vscode.window.showWarningMessage(
+          'Dynamic discoveries must be edited into a static path before creating a draft.',
+        );
         return;
       }
       let method = group.method;
       let path = group.path ?? '/';
       if (action.value === 'edit') {
-        const editedMethod = await vscode.window.showInputBox({ prompt: 'HTTP method', value: method });
-        const editedPath = editedMethod && await vscode.window.showInputBox({ prompt: 'API path', value: path });
+        const editedMethod = await vscode.window.showInputBox({
+          prompt: 'HTTP method',
+          value: method,
+        });
+        const editedPath =
+          editedMethod && (await vscode.window.showInputBox({ prompt: 'API path', value: path }));
         if (!editedMethod || !editedPath) return;
         method = editedMethod.toUpperCase() as typeof method;
         path = editedPath;
@@ -135,11 +154,16 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       try {
         const draftMethod = method as ApiDefinitionDraft['method'];
-        await createClient(authentication).createApi(projectId, { name: `${draftMethod} ${path}`, method: draftMethod, path });
+        await createClient(authentication).createApi(projectId, {
+          name: `${draftMethod} ${path}`,
+          method: draftMethod,
+          path,
+        });
         tree.refresh();
         void vscode.window.showInformationMessage(`Created draft for ${draftMethod} ${path}.`);
       } catch (error) {
-        const message = error instanceof ControlPlaneError ? error.message : 'Could not create the API draft.';
+        const message =
+          error instanceof ControlPlaneError ? error.message : 'Could not create the API draft.';
         void vscode.window.showErrorMessage(message);
       }
     }),

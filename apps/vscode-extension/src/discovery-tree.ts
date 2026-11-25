@@ -9,9 +9,16 @@ export class DiscoveryTreeItem extends vscode.TreeItem {
     this.description = [group.certainty, duplicateCount > 1 ? `${duplicateCount} calls` : undefined]
       .filter(Boolean)
       .join(' · ');
-    this.tooltip = group.warnings.length > 0 ? group.warnings.join('\n') : `${duplicateCount} source reference(s)`;
+    this.tooltip =
+      group.warnings.length > 0
+        ? group.warnings.join('\n')
+        : `${duplicateCount} source reference(s)`;
     this.contextValue = 'mockflow.discovery';
-    this.command = { command: 'mockflow.reviewDiscovery', title: 'Review Discovery', arguments: [group.id] };
+    this.command = {
+      command: 'mockflow.reviewDiscovery',
+      title: 'Review Discovery',
+      arguments: [group.id],
+    };
   }
 }
 
@@ -21,8 +28,12 @@ export class DiscoveryTreeProvider implements vscode.TreeDataProvider<DiscoveryT
 
   constructor(private readonly review: DiscoveryReviewService) {}
 
-  refresh(): void { this.changed.fire(undefined); }
-  getTreeItem(item: DiscoveryTreeItem): vscode.TreeItem { return item; }
+  refresh(): void {
+    this.changed.fire(undefined);
+  }
+  getTreeItem(item: DiscoveryTreeItem): vscode.TreeItem {
+    return item;
+  }
   getChildren(): DiscoveryTreeItem[] {
     const groups = this.review.visibleGroups();
     return groups.length > 0 ? groups.map((group) => new DiscoveryTreeItem(group)) : [];

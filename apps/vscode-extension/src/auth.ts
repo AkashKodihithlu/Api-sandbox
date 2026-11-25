@@ -27,7 +27,11 @@ export class AuthenticationService {
     }
   }
 
-  async signIn(client: ControlPlaneClient, email: string, password: string): Promise<AuthenticatedUser> {
+  async signIn(
+    client: ControlPlaneClient,
+    email: string,
+    password: string,
+  ): Promise<AuthenticatedUser> {
     const session: SessionResponse = await client.createSession(email, password);
     await this.secrets.store(TOKEN_SECRET_KEY, session.token);
     await this.secrets.store(USER_SECRET_KEY, JSON.stringify(session.user));
@@ -35,6 +39,9 @@ export class AuthenticationService {
   }
 
   async signOut(): Promise<void> {
-    await Promise.all([this.secrets.delete(TOKEN_SECRET_KEY), this.secrets.delete(USER_SECRET_KEY)]);
+    await Promise.all([
+      this.secrets.delete(TOKEN_SECRET_KEY),
+      this.secrets.delete(USER_SECRET_KEY),
+    ]);
   }
 }

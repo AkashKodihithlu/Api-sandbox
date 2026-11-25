@@ -23,7 +23,9 @@ export interface RequestValidationIssue {
 }
 
 export type RequestValidationErrorCode =
-  'INVALID_REQUEST_BODY' | 'REQUEST_BODY_TOO_LARGE' | 'INVALID_REQUEST_SCHEMA';
+  | 'INVALID_REQUEST_BODY'
+  | 'REQUEST_BODY_TOO_LARGE'
+  | 'INVALID_REQUEST_SCHEMA';
 
 export type RequestValidationResult =
   | { valid: true }

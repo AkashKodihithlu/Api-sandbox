@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_PROJECT_KEY, ProjectSelectionService, type WorkspaceState } from '../src/project-state.js';
+import {
+  CURRENT_PROJECT_KEY,
+  ProjectSelectionService,
+  type WorkspaceState,
+} from '../src/project-state.js';
 
 class MemoryWorkspaceState implements WorkspaceState {
   readonly values = new Map<string, unknown>();
-  get<T>(key: string): T | undefined { return this.values.get(key) as T | undefined; }
-  update(key: string, value: unknown) { if (value === undefined) this.values.delete(key); else this.values.set(key, value); return Promise.resolve(); }
+  get<T>(key: string): T | undefined {
+    return this.values.get(key) as T | undefined;
+  }
+  update(key: string, value: unknown) {
+    if (value === undefined) this.values.delete(key);
+    else this.values.set(key, value);
+    return Promise.resolve();
+  }
 }
 
 describe('ProjectSelectionService', () => {

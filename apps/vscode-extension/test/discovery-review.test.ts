@@ -6,7 +6,16 @@ describe('DiscoveryReviewService', () => {
     const scannedRoots: string[] = [];
     const review = new DiscoveryReviewService(async (root) => {
       scannedRoots.push(root);
-      return [{ id: 'GET:/users', method: 'GET', path: '/users', certainty: 'static', warnings: [], discoveries: [] }];
+      return [
+        {
+          id: 'GET:/users',
+          method: 'GET',
+          path: '/users',
+          certainty: 'static',
+          warnings: [],
+          discoveries: [],
+        },
+      ];
     });
 
     await review.scan('/workspace');

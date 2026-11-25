@@ -140,7 +140,9 @@ export class ControlPlaneClient {
     if (!response.ok) {
       const parsed = apiErrorSchema.safeParse(payload);
       throw new ControlPlaneError(
-        parsed.success ? parsed.data.error.message : `MockFlow request failed (${response.status}).`,
+        parsed.success
+          ? parsed.data.error.message
+          : `MockFlow request failed (${response.status}).`,
         response.status,
         parsed.success ? parsed.data.error.code : 'REQUEST_FAILED',
       );

@@ -26,7 +26,8 @@ import {
  * metadata with API scenario configuration.
  */
 export interface MockEngineRoute
-  extends RouteDefinition, Omit<MockApiDefinition, 'method' | 'path'> {
+  extends RouteDefinition,
+    Omit<MockApiDefinition, 'method' | 'path'> {
   id: string;
   scenarios: MockScenario[];
 }
@@ -172,9 +173,8 @@ export interface MockExecutionOptions extends ExecuteResponseOptions {
   requestValidation?: RequestValidationOptions;
 }
 
-export interface MockEngineOptions<
-  TRoute extends MockEngineRoute = MockEngineRoute,
-> extends MockExecutionOptions {
+export interface MockEngineOptions<TRoute extends MockEngineRoute = MockEngineRoute>
+  extends MockExecutionOptions {
   routes: TRoute[];
 }
 

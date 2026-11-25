@@ -1,6 +1,9 @@
 import { scanWorkspace, type DiscoveryGroup, type ScanOptions } from '@mockflow/api-discovery';
 
-export type WorkspaceScanner = (workspaceRoot: string, options?: ScanOptions) => Promise<DiscoveryGroup[]>;
+export type WorkspaceScanner = (
+  workspaceRoot: string,
+  options?: ScanOptions,
+) => Promise<DiscoveryGroup[]>;
 
 export class DiscoveryReviewService {
   private groups: DiscoveryGroup[] = [];

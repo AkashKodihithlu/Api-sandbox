@@ -1,19 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { AuthenticationService, TOKEN_SECRET_KEY, USER_SECRET_KEY, type SecretStore } from '../src/auth.js';
+import {
+  AuthenticationService,
+  TOKEN_SECRET_KEY,
+  USER_SECRET_KEY,
+  type SecretStore,
+} from '../src/auth.js';
 import { ControlPlaneClient } from '../src/client.js';
 
 class MemorySecrets implements SecretStore {
   readonly values = new Map<string, string>();
-  get(key: string) { return Promise.resolve(this.values.get(key)); }
-  store(key: string, value: string) { this.values.set(key, value); return Promise.resolve(); }
-  delete(key: string) { this.values.delete(key); return Promise.resolve(); }
+  get(key: string) {
+    return Promise.resolve(this.values.get(key));
+  }
+  store(key: string, value: string) {
+    this.values.set(key, value);
+    return Promise.resolve();
+  }
+  delete(key: string) {
+    this.values.delete(key);
+    return Promise.resolve();
+  }
 }
 
 describe('AuthenticationService', () => {
   it('stores only the session token and user in secret storage', async () => {
     const secrets = new MemorySecrets();
-    const client = new ControlPlaneClient('https://mockflow.test', async () => undefined, async () =>
-      new Response(JSON.stringify({ data: { token: 'token-value', user: { id: 'u1', email: 'dev@example.test' } } }), { status: 200 }),
+    const client = new ControlPlaneClient(
+      'https://mockflow.test',
+      async () => undefined,
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: { token: 'token-value', user: { id: 'u1', email: 'dev@example.test' } },
+          }),
+          { status: 200 },
+        ),
     );
     const auth = new AuthenticationService(secrets);
 

@@ -33,13 +33,34 @@
       ]
     },
     "commands": [
-      { "command": "mockflow.signIn", "title": "MockFlow: Sign In" },
-      { "command": "mockflow.signOut", "title": "MockFlow: Sign Out" },
-      { "command": "mockflow.selectProject", "title": "MockFlow: Select Project" },
-      { "command": "mockflow.refresh", "title": "MockFlow: Refresh" },
-      { "command": "mockflow.scanWorkspace", "title": "MockFlow: Scan Workspace for APIs" },
-      { "command": "mockflow.reviewDiscovery", "title": "MockFlow: Review Discovery" },
-      { "command": "mockflow.ignoreDiscovery", "title": "MockFlow: Ignore Discovery" }
+      {
+        "command": "mockflow.signIn",
+        "title": "MockFlow: Sign In"
+      },
+      {
+        "command": "mockflow.signOut",
+        "title": "MockFlow: Sign Out"
+      },
+      {
+        "command": "mockflow.selectProject",
+        "title": "MockFlow: Select Project"
+      },
+      {
+        "command": "mockflow.refresh",
+        "title": "MockFlow: Refresh"
+      },
+      {
+        "command": "mockflow.scanWorkspace",
+        "title": "MockFlow: Scan Workspace for APIs"
+      },
+      {
+        "command": "mockflow.reviewDiscovery",
+        "title": "MockFlow: Review Discovery"
+      },
+      {
+        "command": "mockflow.ignoreDiscovery",
+        "title": "MockFlow: Ignore Discovery"
+      }
     ],
     "configuration": {
       "title": "MockFlow",

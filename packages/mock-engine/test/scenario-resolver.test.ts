@@ -532,7 +532,8 @@ describe('Scenario Resolver', () => {
 
   describe('Integration with Route Matcher', () => {
     interface FullRouteDefinition
-      extends RouteDefinition, Omit<MockApiDefinition, 'method' | 'path'> {
+      extends RouteDefinition,
+        Omit<MockApiDefinition, 'method' | 'path'> {
       id: string;
       scenarios: MockScenario[];
     }
