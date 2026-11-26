@@ -112,7 +112,7 @@ function compareSpecificity(
   b: CompiledRoute<RouteDefinition>,
 ): number {
   if (a.specificity.length !== b.specificity.length) {
-    return 0;
+    return a.specificity.length - b.specificity.length;
   }
 
   for (let i = 0; i < a.specificity.length; i++) {
