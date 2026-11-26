@@ -1,4 +1,4 @@
-import { apiErrorSchema } from '@mockflow/contracts';
+import { apiErrorSchema, type ScenarioType } from '@mockflow/contracts';
 
 export interface ProjectSummary {
   id: string;
@@ -14,6 +14,9 @@ export interface ApiDefinitionSummary {
   name: string;
   method: string;
   path: string;
+  description?: string | null;
+  requestSchema?: Record<string, unknown> | null;
+  defaultScenarioId?: string | null;
   isPublished: boolean;
 }
 
@@ -25,7 +28,11 @@ export interface EnvironmentSummary {
 export interface ScenarioSummary {
   id: string;
   name: string;
+  type?: ScenarioType;
   statusCode: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  delayMs?: number;
   isDefault: boolean;
 }
 
@@ -45,7 +52,30 @@ export interface ApiDefinitionDraft {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   description?: string;
+  requestSchema?: Record<string, unknown> | null;
 }
+
+export interface ApiDefinitionPatch {
+  name?: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path?: string;
+  description?: string;
+  requestSchema?: Record<string, unknown> | null;
+  defaultScenarioId?: string | null;
+  isPublished?: boolean;
+}
+
+export interface ScenarioDraft {
+  name: string;
+  type?: ScenarioType;
+  statusCode: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  delayMs?: number;
+  isDefault?: boolean;
+}
+
+export type ScenarioPatch = Partial<ScenarioDraft>;
 
 interface ApiEnvelope<T> {
   data: T;
@@ -92,6 +122,10 @@ export class ControlPlaneClient {
     );
   }
 
+  async getApi(apiId: string): Promise<ApiDefinitionSummary> {
+    return this.request<ApiDefinitionSummary>(`/v1/apis/${encodeURIComponent(apiId)}`);
+  }
+
   async listEnvironments(projectId: string): Promise<EnvironmentSummary[]> {
     return this.request<EnvironmentSummary[]>(
       `/v1/projects/${encodeURIComponent(projectId)}/environments`,
@@ -107,6 +141,37 @@ export class ControlPlaneClient {
       `/v1/projects/${encodeURIComponent(projectId)}/apis`,
       { method: 'POST', body: draft },
     );
+  }
+
+  async updateApi(apiId: string, patch: ApiDefinitionPatch): Promise<ApiDefinitionSummary> {
+    return this.request<ApiDefinitionSummary>(`/v1/apis/${encodeURIComponent(apiId)}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+  }
+
+  async deleteApi(apiId: string): Promise<void> {
+    await this.request<void>(`/v1/apis/${encodeURIComponent(apiId)}`, { method: 'DELETE' });
+  }
+
+  async createScenario(apiId: string, draft: ScenarioDraft): Promise<ScenarioSummary> {
+    return this.request<ScenarioSummary>(`/v1/apis/${encodeURIComponent(apiId)}/scenarios`, {
+      method: 'POST',
+      body: draft,
+    });
+  }
+
+  async updateScenario(scenarioId: string, patch: ScenarioPatch): Promise<ScenarioSummary> {
+    return this.request<ScenarioSummary>(`/v1/scenarios/${encodeURIComponent(scenarioId)}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+  }
+
+  async deleteScenario(scenarioId: string): Promise<void> {
+    await this.request<void>(`/v1/scenarios/${encodeURIComponent(scenarioId)}`, {
+      method: 'DELETE',
+    });
   }
 
   private async request<T>(
@@ -134,6 +199,10 @@ export class ControlPlaneClient {
         0,
         'NETWORK_ERROR',
       );
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     const payload: unknown = await response.json().catch(() => undefined);
