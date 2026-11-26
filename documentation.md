@@ -54,7 +54,7 @@ next checks I would run are the migration against an empty PostgreSQL database,
 the integration test with `TEST_DATABASE_URL`, and the complete root quality
 suite.
 
-**## Phase 2 — Core Mock Engine and Runtime Integration**
+## Phase 2 — Core Mock Engine and Runtime Integration
 
 Commits: `e689e1b`, `b714761`, `240942a`, `58e72a5`, `d85a068`, `87b6a0b`, `38bc22a`, `a94ade4`, `f59ff27`, `b6fdb4d`
 
@@ -72,7 +72,7 @@ The implementation, integration testing, comparator fix, and audit documentation
 
 ---
 
-**## Phase 3 — Scenarios and Request Validation**
+## Phase 3 — Scenarios and Request Validation
 
 Commit: `c8a3bba` — `feat: add phase 3 scenario validation`
 
