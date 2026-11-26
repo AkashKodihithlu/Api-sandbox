@@ -54,7 +54,7 @@ next checks I would run are the migration against an empty PostgreSQL database,
 the integration test with `TEST_DATABASE_URL`, and the complete root quality
 suite.
 
-**## Phase 2 — Core Mock Engine and Runtime Integration**
+## Phase 2 — Core Mock Engine and Runtime Integration
 
 Commits: `e689e1b`, `b714761`, `240942a`, `58e72a5`, `d85a068`, `87b6a0b`, `38bc22a`, `a94ade4`, `f59ff27`, `b6fdb4d`
 
@@ -72,7 +72,7 @@ The implementation, integration testing, comparator fix, and audit documentation
 
 ---
 
-**## Phase 3 — Scenarios and Request Validation**
+## Phase 3 — Scenarios and Request Validation
 
 Commit: `c8a3bba` — `feat: add phase 3 scenario validation`
 
@@ -89,3 +89,33 @@ I verified the implementation through the contracts, mock-engine, API, and runti
 I subsequently conducted a Phase 3 audit covering scenario configuration, request validation, validation-error handling, and runtime integration. No confirmed defects were identified within the audited Phase 3 scope. The findings were documented in `docs/phase-3-audit.md` and committed as `2c87084` (`docs: add phase 3 scenario validation audit report`).
 
 The Phase 2/3 integration and audit work was preserved on my fork under the `feat/phase-2-runtime-integration` branch.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Phase 6 — Mock Generation and Publishing
+
+In Phase 6, I implemented the mock generation and publishing workflow within the VS Code extension, connecting API discovery with draft API creation, scenario configuration, publishing controls, and runtime testing. The goal was to make it easier to turn discovered API endpoints into configurable mocks and publish them for testing without requiring users to manually create every API definition from scratch.
+
+I implemented a draft builder that transforms API discovery results into editable API definitions with inferred suggestions, default scenarios, and optional request-schema suggestions. The workflow includes normalized method/path conflict detection and validation against shared contracts before sending configurations to the control plane. Newly generated APIs remain unpublished by default, ensuring that discovery does not automatically expose endpoints.
+
+I extended the control-plane client and publishing workflow to support API configuration, response scenario management, publishing and unpublishing, and hosted endpoint testing. Publishing is explicitly initiated by the user and validated server-side. The API now verifies default scenario ownership and requires at least one response scenario before allowing an API to be published. I also implemented runtime testing functionality that constructs hosted endpoint URLs, supports request execution, and handles runtime errors safely.
+
+The implementation involved extending the VS Code extension orchestration, project tree interactions, control-plane client, draft builder, runtime tester, and API publishing validation. I also added dedicated tests for draft generation, runtime testing, client functionality, and publishing validation, along with documentation describing the publishing workflow.
+
+During final verification, I initially encountered integration tests that were skipped because a test database connection was not configured. I prepared a dedicated PostgreSQL test database, verified that the existing migrations were applied, and subsequently ran the API and Runtime integration tests against it. The API suite passed **10/10 tests**, and the Runtime suite passed **20/20 tests**. The full monorepo test suite also previously reported **251 passed, 0 failed, and 3 skipped**, while the full monorepo typecheck and build both passed.
+
+I conducted a final read-only code review of the Phase 6 implementation. No critical or high-severity issues or security vulnerabilities were identified. The review identified a non-blocking functional limitation in the VS Code scenario-creation workflow, where newly created scenarios are currently assigned the `SUCCESS` type, along with minor tree-refresh and publishing/default-scenario observations that were documented as follow-up considerations.
+
+The Phase 6 implementation, integration testing, validation, and documentation are now ready for the milestone commit on the `feat/phase-6-mock-generation-publishing` branch.

@@ -289,6 +289,41 @@ export async function registerControlPlaneRoutes(app: FastifyInstance, { db }: R
       return input
         ? sendError(reply, 400, 'VALIDATION_ERROR', 'Supply at least one field')
         : undefined;
+    if (input.defaultScenarioId) {
+      const [defaultScenario] = await db
+        .select({ id: responseScenarios.id })
+        .from(responseScenarios)
+        .where(
+          and(
+            eq(responseScenarios.id, input.defaultScenarioId),
+            eq(responseScenarios.apiDefinitionId, apiId),
+          ),
+        )
+        .limit(1);
+      if (!defaultScenario) {
+        return sendError(
+          reply,
+          400,
+          'VALIDATION_ERROR',
+          'Default scenario must belong to this API definition',
+        );
+      }
+    }
+    if (input.isPublished === true) {
+      const [existingScenario] = await db
+        .select({ id: responseScenarios.id })
+        .from(responseScenarios)
+        .where(eq(responseScenarios.apiDefinitionId, apiId))
+        .limit(1);
+      if (!existingScenario) {
+        return sendError(
+          reply,
+          400,
+          'VALIDATION_ERROR',
+          'Add at least one response scenario before publishing an API definition',
+        );
+      }
+    }
     const [updated] = await db
       .update(apiDefinitions)
       .set({

@@ -61,6 +61,18 @@ declare module 'vscode' {
     };
   };
 
+  export interface OutputChannel {
+    appendLine(value: string): void;
+    show(preserveFocus?: boolean): void;
+    dispose(): void;
+  }
+
+  export const env: {
+    clipboard: {
+      writeText(value: string): PromiseLike<void>;
+    };
+  };
+
   export const window: {
     showInputBox(options?: {
       prompt?: string;
@@ -73,13 +85,17 @@ declare module 'vscode' {
       items: readonly T[],
       options?: { placeHolder?: string },
     ): Promise<T | undefined>;
-    showInformationMessage(message: string): Promise<unknown>;
-    showErrorMessage(message: string): Promise<unknown>;
-    showWarningMessage(message: string): Promise<unknown>;
+    showInformationMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    showErrorMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    showWarningMessage(message: string, ...items: string[]): Promise<string | undefined>;
     registerTreeDataProvider<T>(viewId: string, treeDataProvider: TreeDataProvider<T>): Disposable;
+    createOutputChannel(name: string): OutputChannel;
   };
 
   export const commands: {
-    registerCommand(command: string, callback: (...args: unknown[]) => unknown): Disposable;
+    registerCommand<TArgs extends unknown[] = []>(
+      command: string,
+      callback: (...args: TArgs) => unknown,
+    ): Disposable;
   };
 }

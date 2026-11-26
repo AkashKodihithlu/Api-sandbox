@@ -129,14 +129,19 @@ function bodyHint(value: ts.Expression | undefined): string | undefined {
   return ts.isIdentifier(value) ? value.text : 'dynamic body';
 }
 export function normalizeApiPath(url: string): string | undefined {
-  try {
-    if (/^https?:\/\//i.test(url)) return new URL(url).pathname || '/';
-  } catch {
+  let rawPath = url;
+  if (/^https?:\/\//i.test(url)) {
+    try {
+      rawPath = new URL(url).pathname || '/';
+    } catch {
+      return undefined;
+    }
+  } else if (!url.startsWith('/')) {
     return undefined;
   }
-  if (!url.startsWith('/')) return undefined;
-  const normalized = url.replace(/\/{2,}/g, '/');
-  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
+
+  const normalized = rawPath.replace(/\/{2,}/g, '/');
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') || '/' : normalized;
 }
 function discovered(
   sourceFile: ts.SourceFile,

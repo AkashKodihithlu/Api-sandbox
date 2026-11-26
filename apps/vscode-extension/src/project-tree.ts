@@ -18,6 +18,7 @@ export class MockFlowTreeItem extends vscode.TreeItem {
     readonly label: string,
     readonly value?: ProjectSummary | ApiDefinitionSummary | EnvironmentSummary | ScenarioSummary,
     collapsibleState = vscode.TreeItemCollapsibleState.None,
+    readonly project?: ProjectSummary,
   ) {
     super(label, collapsibleState);
   }
@@ -95,10 +96,11 @@ export class MockFlowTreeProvider implements vscode.TreeDataProvider<MockFlowTre
             `${api.method} ${api.path}`,
             api,
             vscode.TreeItemCollapsibleState.Collapsed,
+            project,
           );
           item.description = api.isPublished ? 'published' : 'draft';
           item.tooltip = api.name;
-          item.contextValue = 'mockflow.api';
+          item.contextValue = api.isPublished ? 'mockflow.api.published' : 'mockflow.api.draft';
           return item;
         });
         const environmentNodes = environments.map((environment) => {
