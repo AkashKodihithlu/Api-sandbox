@@ -625,5 +625,18 @@ describe('Route Matcher', () => {
         expect(matcher('GET', '/unknown')).toBeNull();
       }
     });
+
+    it('orders static routes ahead of parameterized routes even across mixed segment lengths', () => {
+      const routes: RouteDefinition[] = [
+        { method: 'GET', path: '/users/:id' },
+        { method: 'GET', path: '/health' },
+        { method: 'GET', path: '/a/b/c' },
+        { method: 'GET', path: '/users/me' },
+      ];
+      const matcher = compileRoutes(routes);
+
+      expect(matcher('GET', '/users/me')?.route.path).toBe('/users/me');
+      expect(matcher('GET', '/users/42')?.params).toEqual({ id: '42' });
+    });
   });
 });
