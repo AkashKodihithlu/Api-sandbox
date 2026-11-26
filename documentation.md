@@ -54,48 +54,38 @@ next checks I would run are the migration against an empty PostgreSQL database,
 the integration test with `TEST_DATABASE_URL`, and the complete root quality
 suite.
 
-**## Phase 2 — core mock engine**
+**## Phase 2 — Core Mock Engine and Runtime Integration**
 
-Commit: `e689e1b` — `feat(mock-engine): implement route matcher`
+Commits: `e689e1b`, `b714761`, `240942a`, `58e72a5`, `d85a068`, `87b6a0b`, `38bc22a`, `a94ade4`, `f59ff27`, `b6fdb4d`
 
-I started Phase 2 by implementing the route matcher inside the `packages/mock-engine` package. It handles HTTP method and path matching, including parameterized routes, route specificity, path normalization, URL parameter decoding, and validation against invalid or ambiguous route configurations. I also added tests covering static and parameterized routes, method isolation, normalization, malformed paths, and edge cases.
+In Phase 2, I implemented the core mock engine, including route matching, scenario resolution, and response execution. The route matcher supports HTTP method and path matching, parameterized routes, route specificity, path normalization, and validation against invalid or ambiguous configurations. The scenario resolver supports explicit scenario selection, environment-specific mappings, default scenarios, and fallback behavior. The response executor handles configured status codes, headers, bodies, artificial delays, security headers, body-size limits, and response validation.
 
-Commit: `b714761` — `feat(mock-engine): implement scenario resolver`
+I then integrated the mock engine into the public runtime service. I extracted the shared database infrastructure into a reusable package and implemented the runtime store to retrieve projects, API definitions, scenarios, and environment configurations. The runtime now resolves projects using their public slugs, matches incoming routes, selects environments and scenarios, executes mock responses, and records request logs. The public endpoint convention is `/p/{projectSlug}/{routePath}`.
 
-Next, I implemented the scenario resolver, which determines which response scenario should be used for a matched API definition. It supports explicit scenario selection, environment-specific scenario mappings, API default scenarios, and optional fallback behavior. I added validation for missing scenarios, mismatched API or project ownership, conflicting selections, and invalid configurations. The resolver remains framework-independent and receives the scenario data from its caller rather than fetching it itself.
+I also implemented runtime safeguards, including sensitive-header redaction, bounded execution behavior, structured error handling, and best-effort request logging. The runtime and control plane remain separate services, while the runtime directly accesses the shared database infrastructure rather than relying on control-plane HTTP requests during mock execution.
 
-Commit: `240942a` — `feat(mock-engine): implement response executor`
+During verification, I identified and fixed a route specificity comparator defect that affected ordering in certain cases involving routes with different segment lengths. I corrected the comparator to enforce strict weak ordering and added regression tests. I also conducted a Phase 2 audit and documented the runtime architecture and audit findings in `docs/runtime-architecture.md` and `docs/phase-2-audit.md`.
 
-I then implemented the response executor to construct mock responses with status codes, headers, bodies, and artificial delays. It validates status codes, header names and values, rejects prohibited hop-by-hop and framing headers, enforces response body size and delay limits, and includes mandatory security headers. It also handles body-forbidden HTTP statuses, safe JSON serialization, text and binary responses, and structured execution errors. Tests cover response validation, size limits, delay limits, body handling, and HTTP status-specific behavior.
+I verified the implementation using a dedicated PostgreSQL test database. The verified test results included 26 contracts tests, 178 mock-engine tests, 1 DB test, 7 API tests, and 20 runtime tests, with the runtime suite completing without skips. I also verified typechecking and builds across the core packages at the relevant checkpoints.
 
-Commit: `58e72a5` — `feat(mock-engine): integrate unified engine`
+The implementation, integration testing, comparator fix, and audit documentation were committed and preserved on my fork under the `feat/phase-2-runtime-integration` branch.
 
-Finally, I integrated the route matcher, scenario resolver, and response executor into a unified mock engine API. The engine handles the complete flow from matching an incoming request to resolving the appropriate scenario and constructing the response. It supports request context, explicit scenario selection through request fields or headers, environment selection, configurable execution limits, structured success and failure results, and artificial response delays. I also added integration tests covering the complete execution flow, route matching failures, scenario resolution failures, response execution failures, parameter extraction, and scenario selection behavior.
+---
 
-The main challenge during this phase was ensuring that all four components worked together while remaining independent of Fastify, database access, and other application infrastructure. I focused on route specificity, scenario selection precedence, response validation, error handling, and keeping the engine reusable for the runtime integration phase. I verified the implementation with 151 passing tests across the four test suites, along with successful TypeScript typechecking, build, and Prettier checks.
-
-While preparing the project for GitHub Actions, I encountered a Bun version mismatch between the local environment and the CI workflow. The workflow was using Bun 1.3.14, while the lockfile was generated using a newer Bun version. This caused the dependency installation step to fail with an unknown lockfile version error. I updated the CI workflow to use Bun 1.4.5 to align it with the lockfile, which resolved that installation issue.
-
-I also encountered formatting failures during CI because several repository files did not follow the Prettier formatting rules. I ran the formatter across the repository and verified that the formatting check passed locally. During further CI verification, I found a package-resolution issue involving `@mockflow/config` in the API and runtime lint checks, which I am still investigating.
-
-The implementation was pushed to my fork, `AkashKodihithlu/Api-sandbox`, on the `main` branch.
-
-
-
-**## Phase 3 — scenarios and request validation**
+**## Phase 3 — Scenarios and Request Validation**
 
 Commit: `c8a3bba` — `feat: add phase 3 scenario validation`
 
-In Phase 3, I extended the MockFlow contracts, control-plane API, and mock engine to support typed response scenarios and request-schema validation. I introduced additional scenario types and updated the database schema and migration to accommodate the new scenario configuration.
+In Phase 3, I extended the contracts, control-plane API, and mock engine to support typed response scenarios and request-schema validation. I implemented a bounded JSON Schema validator supporting structural constraints, supported schema keywords, references, nested validation, and structured validation issues. The validation functionality was integrated into the unified engine so invalid requests can produce structured failures and resolve to configured validation-error scenarios.
 
-I implemented request validation in the mock engine using a bounded JSON Schema subset. The validator supports validating incoming request bodies against configured schemas, including structural constraints, supported schema keywords, references, nested validation, and structured validation issue reporting. I also integrated request validation into the unified engine execution flow so that invalid requests can produce structured validation failures and resolve to dedicated validation-error scenarios where configured.
+I also extended scenario management and validation on the control-plane side. Scenario configurations are validated when saved, and PATCH operations validate the merged configuration rather than only the fields included in the update. This helps prevent partial updates from leaving configurations invalid. I updated the database migration and API tests to cover scenario persistence, validation behavior, and server lifecycle handling.
 
-On the control-plane side, I extended scenario management and validation logic. Scenario configurations are validated when saved, and PATCH operations validate the merged configuration rather than only the fields included in the incoming update. This helps prevent partial updates from leaving scenario configurations in an invalid state. I also added the database migration and updated the API tests to cover scenario persistence, validation behavior, and server lifecycle handling.
+A significant challenge during this phase was implementing safe regular-expression validation and execution. Instead of relying directly on potentially unsafe regex execution, I implemented a bounded regex engine based on a Thompson NFA approach, with syntax restrictions, execution budgets, and resource limits to reduce the risk of catastrophic backtracking and excessive resource consumption. Tests cover supported syntax, invalid patterns, edge cases, and resource limits.
 
-A significant part of this phase involved implementing safe regular-expression validation and execution for schema-related validation rules. Instead of relying directly on potentially unsafe regular-expression execution, I implemented a bounded regex engine based on a Thompson NFA approach. This includes restrictions on unsupported syntax, execution budgets, and resource limits to reduce the risk of catastrophic backtracking and excessive resource consumption. I also added tests covering supported syntax, invalid patterns, edge cases, and resource limits.
+I integrated request validation with the runtime execution pipeline, ensuring that request validation, scenario resolution, environment handling, and response execution work together while preserving the existing mock-engine functionality.
 
-The main challenge during this phase was implementing validation that was expressive enough to support useful request-schema constraints while remaining bounded and safe. I also focused on ensuring that validation was consistent across the contracts package, control-plane API, and mock engine, while preserving the existing route matching, scenario resolution, and response execution behavior.
+I verified the implementation through the contracts, mock-engine, API, and runtime test suites, with later integration checkpoints recording 26 contracts tests, 178 mock-engine tests, 1 DB test, 7 API tests, and 20 runtime tests passing. I also completed typechecking and build verification for the core packages at the relevant checkpoints.
 
-I verified the implementation with 177 passing mock-engine tests, 26 passing contracts tests, and the API test suite with 5 passing tests and 2 skipped tests. I also ran the complete workspace TypeScript typecheck and build successfully. The complete monorepo test suite passed, with tests requiring dedicated integration-test configuration skipped where applicable.
+I subsequently conducted a Phase 3 audit covering scenario configuration, request validation, validation-error handling, and runtime integration. No confirmed defects were identified within the audited Phase 3 scope. The findings were documented in `docs/phase-3-audit.md` and committed as `2c87084` (`docs: add phase 3 scenario validation audit report`).
 
-The implementation was committed as `c8a3bba` on the `feat/phase-3-scenarios-validation` branch and pushed to my fork, `AkashKodihithlu/Api-sandbox`.
+The Phase 2/3 integration and audit work was preserved on my fork under the `feat/phase-2-runtime-integration` branch.

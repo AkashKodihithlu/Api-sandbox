@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "@mockflow/config": "workspace:*",
+    "@mockflow/contracts": "workspace:*",
+    "@mockflow/db": "workspace:*",
+    "@mockflow/mock-engine": "workspace:*",
+    "drizzle-orm": "^0.41.0",
     "fastify": "^5.3.2"
   },
   "devDependencies": {
