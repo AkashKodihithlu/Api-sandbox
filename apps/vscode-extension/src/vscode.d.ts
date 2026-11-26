@@ -80,6 +80,9 @@ declare module 'vscode' {
   };
 
   export const commands: {
-    registerCommand(command: string, callback: (...args: unknown[]) => unknown): Disposable;
+    registerCommand<TArgs extends unknown[] = []>(
+      command: string,
+      callback: (...args: TArgs) => unknown,
+    ): Disposable;
   };
 }

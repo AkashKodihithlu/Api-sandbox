@@ -36,7 +36,14 @@ describe('API discovery', () => {
   });
   it('normalizes absolute and relative paths', () => {
     expect(normalizeApiPath('https://api.example.test/v1/users/?page=2')).toBe('/v1/users');
+    expect(normalizeApiPath('https://api.example.test/v1/users/')).toBe('/v1/users');
+    expect(normalizeApiPath('https://api.example.test/v1//users///?active=true')).toBe('/v1/users');
+    expect(normalizeApiPath('https://api.example.test/')).toBe('/');
+    expect(normalizeApiPath('https://api.example.test')).toBe('/');
     expect(normalizeApiPath('/v1//users/')).toBe('/v1/users');
+    expect(normalizeApiPath('/')).toBe('/');
+    expect(normalizeApiPath('///')).toBe('/');
     expect(normalizeApiPath('api/users')).toBeUndefined();
+    expect(normalizeApiPath('https://[invalid')).toBeUndefined();
   });
 });

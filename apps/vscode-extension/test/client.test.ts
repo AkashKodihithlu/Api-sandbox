@@ -40,9 +40,10 @@ describe('ControlPlaneClient', () => {
       },
     );
 
-    await expect(client.listProjects()).rejects.toMatchObject<Partial<ControlPlaneError>>({
+    const expectedError: Partial<ControlPlaneError> = {
       code: 'NETWORK_ERROR',
       status: 0,
-    });
+    };
+    await expect(client.listProjects()).rejects.toMatchObject(expectedError);
   });
 });
