@@ -87,6 +87,12 @@ export function buildApp(options: RuntimeAppOptions = {}) {
     const routePath = extractRoutePath(params['*']);
     const normalizedHeaders = normalizeRequestHeaders(request.headers);
 
+    const environmentKey =
+      normalizedHeaders['x-mockflow-environment'] ?? normalizedHeaders['x-mockflow-environment-id'];
+    const resolvedEnvironment = environmentKey
+      ? await store.resolveEnvironment(project.id, environmentKey)
+      : null;
+
     const engine = createMockEngine({
       routes,
       maxBodyBytes: maxResponseBodyBytes,
@@ -94,16 +100,22 @@ export function buildApp(options: RuntimeAppOptions = {}) {
       requestValidation: { maxBodyBytes: maxRequestBodyBytes },
     });
 
-    const result = await engine.executeWithDelay({
-      method: request.method,
-      path: routePath,
-      query:
-        request.query && typeof request.query === 'object'
-          ? (request.query as Record<string, unknown>)
-          : undefined,
-      headers: normalizedHeaders,
-      body: request.body,
-    });
+    const result = await engine.executeWithDelay(
+      {
+        method: request.method,
+        path: routePath,
+        query:
+          request.query && typeof request.query === 'object'
+            ? (request.query as Record<string, unknown>)
+            : undefined,
+        headers: normalizedHeaders,
+        body: request.body,
+        environmentId: resolvedEnvironment?.id ?? null,
+      },
+      {
+        environmentScenarios: resolvedEnvironment?.scenarios ?? null,
+      },
+    );
 
     if (result.status === 'MATCHED') {
       for (const [headerName, headerValue] of Object.entries(result.response.headers)) {
@@ -120,9 +132,18 @@ export function buildApp(options: RuntimeAppOptions = {}) {
     }
 
     if (result.status === 'REQUEST_VALIDATION_FAILED') {
+      if (result.error.code === 'INVALID_REQUEST_SCHEMA') {
+        return sendRuntimeError(
+          reply,
+          500,
+          'MOCK_CONFIGURATION_ERROR',
+          'Mock endpoint request validation schema is invalid',
+        );
+      }
+      const statusCode = result.error.code === 'REQUEST_BODY_TOO_LARGE' ? 413 : 400;
       return sendRuntimeError(
         reply,
-        400,
+        statusCode,
         result.error.code,
         result.error.message,
         result.error.issues,
