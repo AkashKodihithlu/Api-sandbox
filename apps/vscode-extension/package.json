@@ -19,7 +19,7 @@
         {
           "id": "mockflow",
           "title": "MockFlow",
-          "icon": "$(cloud)"
+          "icon": "$(network)"
         }
       ]
     },
