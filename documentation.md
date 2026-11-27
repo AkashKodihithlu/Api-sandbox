@@ -90,6 +90,30 @@ I subsequently conducted a Phase 3 audit covering scenario configuration, reques
 
 The Phase 2/3 integration and audit work was preserved on my fork under the `feat/phase-2-runtime-integration` branch.
 
+---
+
+## Phase 4 — VS Code Extension Foundation
+
+Commits: `9efd184` — `feat(extension): add secure authentication and control-plane client`; `d0167cc` — `feat(extension): add project workspace tree and selection`
+
+In Phase 4, I established the MockFlow VS Code extension as the local client for the control plane. The extension registers Command Palette actions and a MockFlow Activity Bar container with a project tree, giving users a VS Code-native place to sign in, select a project, refresh its state, and browse APIs, environments, and scenarios.
+
+Authentication uses the VS Code `SecretStorage` API. Session tokens and the signed-in user are stored under dedicated secret keys, are cleared on sign-out, and are never persisted in workspace settings or written to extension logs. The extension uses a typed control-plane client for authentication, project, API, environment, and scenario operations; client failures are converted into user-facing messages rather than crashing the extension.
+
+I also added workspace-scoped project selection using `workspaceState`, so the active MockFlow project is remembered for that workspace. The project tree has loading, empty, signed-out, and error states, and it refreshes after authentication or selection changes. Tests cover credential storage and removal, malformed stored user data, client request/error behavior, and project-selection persistence.
+
+---
+
+## Phase 5 — Local Source-Code API Discovery
+
+Commits: `5e9ed66` — `feat(discovery): add local AST API discovery engine`; `29af134` — `feat(extension): add local API discovery review workflow`; `dc745e7` — `fix: stabilize workspace builds and API discovery`
+
+In Phase 5, I added a local TypeScript AST-based discovery package and connected it to the extension. It scans supported JavaScript and TypeScript source files for `fetch`, Axios verb helpers, and Axios configuration-object calls. For each supported call, it extracts the HTTP method, normalized path, source location, client type, and any identifiable request-body hint. Absolute HTTP URLs are reduced to their paths, duplicate calls are grouped while retaining all source references, and dynamic or unsupported URLs are marked uncertain instead of being guessed.
+
+The scanner is deliberately local-only. It ignores dependency and build directories, respects `.gitignore` plus caller-supplied exclusions, and excludes environment, secret, and credential files from scanning. No source content is sent to the control plane as part of discovery.
+
+The VS Code extension adds an API Discovery tree and commands to scan the current workspace, inspect grouped findings, and ignore individual groups for the current review session. Tests cover supported discovery patterns, normalization and grouping, uncertain dynamic calls, ignore behavior, and the build-stability fixes needed for the workspace package layout.
+
 
 
 
