@@ -2,6 +2,7 @@ export type Project = { id: string; name: string; slug: string; description: str
 export type ApiDefinition = { id: string; name: string; method: string; path: string; description: string | null; isPublished: boolean };
 export type Scenario = { id: string; name: string; type: string; statusCode: number; headers: Record<string, string>; body: unknown; delayMs: number; isDefault: boolean };
 export type Environment = { id: string; name: string };
+export type RequestLog = { id: string; method: string; path: string; statusCode: number; durationMs: number; requestBytes: number; responseBytes: number; redactedHeaders: Record<string, string>; createdAt: string };
 
 type Envelope<T> = { data: T; pagination?: { page: number; pageSize: number; total: number } };
 
@@ -39,4 +40,5 @@ export class ControlPlaneClient {
   createScenario(apiId: string, input: Record<string, unknown>) { return this.request<Scenario>(`/v1/apis/${apiId}/scenarios`, { method: 'POST', body: JSON.stringify(input) }); }
   environments(projectId: string) { return this.request<Environment[]>(`/v1/projects/${projectId}/environments`); }
   createEnvironment(projectId: string, name: string) { return this.request<Environment>(`/v1/projects/${projectId}/environments`, { method: 'POST', body: JSON.stringify({ name }) }); }
+  requestHistory(projectId: string, page = 1) { return this.request<RequestLog[]>(`/v1/projects/${projectId}/requests?page=${page}&pageSize=20`); }
 }

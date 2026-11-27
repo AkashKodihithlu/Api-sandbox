@@ -1,4 +1,4 @@
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -22,6 +22,7 @@ import {
   environmentScenarios,
   projectMembers,
   projects,
+  requestLogs,
   responseScenarios,
   users,
 } from './db/schema.js';
@@ -44,6 +45,10 @@ const credentialsSchema = z.object({
   password: z.string().min(1).max(256),
 });
 const scenarioSelectionSchema = z.object({ scenarioId: z.string().uuid() });
+const requestHistoryQuerySchema = paginationQuerySchema.extend({
+  method: z.string().trim().min(1).max(16).optional(),
+  statusCode: z.coerce.number().int().min(100).max(599).optional(),
+});
 
 function sendError(
   reply: FastifyReply,
@@ -481,6 +486,27 @@ export async function registerControlPlaneRoutes(app: FastifyInstance, { db }: R
         .where(eq(environments.projectId, projectId))
         .orderBy(asc(environments.name)),
     };
+  });
+
+  app.get('/v1/projects/:projectId/requests', async (request, reply) => {
+    const projectId = (request.params as { projectId: string }).projectId;
+    const authorization = await authorizeProject(db, request, reply, projectId);
+    if (!authorization || 'statusCode' in authorization) return;
+    const query = parse(requestHistoryQuerySchema, request.query, reply);
+    if (!query) return;
+    const conditions = [eq(requestLogs.projectId, projectId)];
+    if (query.method) conditions.push(eq(requestLogs.method, query.method.toUpperCase()));
+    if (query.statusCode) conditions.push(eq(requestLogs.statusCode, query.statusCode));
+    const where = and(...conditions);
+    const data = await db
+      .select()
+      .from(requestLogs)
+      .where(where)
+      .orderBy(desc(requestLogs.createdAt))
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize);
+    const [totalRow] = await db.select({ total: count() }).from(requestLogs).where(where);
+    return { data, pagination: { ...query, total: totalRow?.total ?? 0 } };
   });
 
   app.patch('/v1/environments/:environmentId', async (request, reply) => {
