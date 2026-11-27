@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onCommand:mockflow.signIn",
@@ -131,8 +134,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsc -p tsconfig.json --watch",
+    "build": "bun build ./src/extension.ts --outdir ./dist --target node --external vscode --sourcemap",
+    "dev": "bun build --watch ./src/extension.ts --outdir ./dist --target node --external vscode --sourcemap",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
