@@ -1,98 +1,89 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ApiDefinition, ControlPlaneClient, ControlPlaneError, Environment, Project, Scenario } from './lib/control-plane';
 
-type Theme = 'light' | 'dark';
 type View = 'overview' | 'apis' | 'environments' | 'requests' | 'settings';
+type Theme = 'light' | 'dark';
+const views: Array<[View, string]> = [['overview', 'Overview'], ['apis', 'APIs'], ['environments', 'Environments'], ['requests', 'Request history'], ['settings', 'Settings']];
+const descriptions: Record<View, string> = { overview: 'Projects available to your current control-plane session.', apis: 'Create, publish, test, and configure mock endpoints.', environments: 'Configure named environment context for a project.', requests: 'Inspect redacted traffic when request history is available.', settings: 'Manage your local dashboard session.' };
+const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
-const views: Array<{ id: View; label: string; icon: ReactNode }> = [
-  { id: 'overview', label: 'Overview', icon: <GridIcon /> },
-  { id: 'apis', label: 'APIs', icon: <ApiIcon /> },
-  { id: 'environments', label: 'Environments', icon: <LayersIcon /> },
-  { id: 'requests', label: 'Request history', icon: <HistoryIcon /> },
-  { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
-];
-
-const descriptions: Record<View, string> = {
-  overview: 'Select a project to inspect and manage its mock APIs.',
-  apis: 'Create and manage the endpoints available in this project.',
-  environments: 'Configure environment-specific response scenarios.',
-  requests: 'Inspect redacted request activity for the selected project.',
-  settings: 'Manage project access and configuration.',
-};
-
-function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-}
+function setTheme(theme: Theme) { document.documentElement.dataset.theme = theme; localStorage.setItem('mockflow.theme', theme); }
 
 export default function HomePage() {
-  const [activeView, setActiveView] = useState<View>('overview');
-  const [theme, setTheme] = useState<Theme>('light');
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [view, setView] = useState<View>('overview');
+  const [theme, updateTheme] = useState<Theme>('light');
+  const [menu, setMenu] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState('');
+  const [apis, setApis] = useState<ApiDefinition[]>([]);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [selectedApiId, setSelectedApiId] = useState('');
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const initialTheme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-    const storedTheme = window.localStorage.getItem('mockflow.theme') as Theme | null;
-    const resolvedTheme = storedTheme ?? initialTheme;
-    setTheme(resolvedTheme);
-    applyTheme(resolvedTheme);
-  }, []);
+  const client = useMemo(() => new ControlPlaneClient(token ?? undefined), [token]);
+  const project = projects.find((item) => item.id === projectId);
+  const selectedApi = apis.find((item) => item.id === selectedApiId);
 
-  function toggleTheme() {
-    const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    window.localStorage.setItem('mockflow.theme', nextTheme);
-    applyTheme(nextTheme);
+  async function loadProjects(activeClient = client) {
+    try { setError(null); const data = await activeClient.projects(); setProjects(data); setProjectId((current) => current || data[0]?.id || ''); } catch (cause) { handleError(cause); }
   }
+  async function loadProjectData(id = projectId) {
+    if (!id) { setApis([]); setEnvironments([]); return; }
+    try { setError(null); const [apiData, environmentData] = await Promise.all([client.apis(id), client.environments(id)]); setApis(apiData); setEnvironments(environmentData); setSelectedApiId((current) => apiData.some((api) => api.id === current) ? current : apiData[0]?.id || ''); } catch (cause) { handleError(cause); }
+  }
+  async function loadScenarios(id = selectedApiId) { if (!id) { setScenarios([]); return; } try { setScenarios(await client.scenarios(id)); } catch (cause) { handleError(cause); } }
+  function handleError(cause: unknown) { setError(cause instanceof ControlPlaneError ? cause.message : 'Could not reach the control plane.'); }
 
-  const title = views.find((view) => view.id === activeView)?.label ?? 'Overview';
+  useEffect(() => { const storedToken = localStorage.getItem('mockflow.session.token'); const storedEmail = localStorage.getItem('mockflow.session.email'); if (storedToken) { setToken(storedToken); setEmail(storedEmail ?? ''); } const initial = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'; const saved = localStorage.getItem('mockflow.theme') as Theme | null; updateTheme(saved ?? initial); setTheme(saved ?? initial); }, []);
+  useEffect(() => { if (token) void loadProjects(new ControlPlaneClient(token)); }, [token]);
+  useEffect(() => { if (token) void loadProjectData(); }, [projectId]);
+  useEffect(() => { if (token) void loadScenarios(); }, [selectedApiId]);
 
-  return (
-    <main className="app-shell">
-      <aside className={`sidebar ${navigationOpen ? 'sidebar-open' : ''}`} aria-label="Main navigation">
-        <div className="brand"><span className="brand-mark" aria-hidden="true">M</span><span>MockFlow</span></div>
-        <nav className="navigation">
-          <p className="nav-label">Workspace</p>
-          {views.slice(0, 4).map((view) => <button className={`nav-item ${activeView === view.id ? 'nav-item-active' : ''}`} key={view.id} onClick={() => { setActiveView(view.id); setNavigationOpen(false); }} type="button">{view.icon}<span>{view.label}</span></button>)}
-        </nav>
-        <div className="sidebar-footer">
-          <button className={`nav-item ${activeView === 'settings' ? 'nav-item-active' : ''}`} onClick={() => { setActiveView('settings'); setNavigationOpen(false); }} type="button"><SettingsIcon /><span>Settings</span></button>
-          <div className="account-row"><span className="account-avatar" aria-hidden="true">?</span><span className="account-copy"><strong>Not signed in</strong><small>Control plane session</small></span></div>
-        </div>
-      </aside>
-      <section className="workspace">
-        <header className="topbar">
-          <button className="icon-button menu-button" type="button" aria-label="Open navigation" onClick={() => setNavigationOpen((open) => !open)}><MenuIcon /></button>
-          <div className="project-selector" aria-label="Current project"><span className="project-dot" aria-hidden="true" /><span>No project selected</span><ChevronIcon /></div>
-          <div className="topbar-actions"><button className={`theme-toggle ${theme === 'dark' ? 'theme-toggle-dark' : ''}`} type="button" role="switch" aria-checked={theme === 'dark'} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleTheme}><span className="theme-toggle-icon theme-toggle-sun"><SunIcon /></span><span className="theme-toggle-icon theme-toggle-moon"><MoonIcon /></span><span className="theme-toggle-knob" /></button></div>
-        </header>
-        <div className="content">
-          <div className="page-heading"><div><h1>{title}</h1><p>{descriptions[activeView]}</p></div>{activeView === 'apis' && <button className="button button-primary" type="button" disabled>Create API</button>}</div>
-          <DashboardContent view={activeView} />
-        </div>
-      </section>
-      {navigationOpen && <button className="backdrop" aria-label="Close navigation" onClick={() => setNavigationOpen(false)} type="button" />}
-    </main>
-  );
+  function toggleTheme() { const next = theme === 'dark' ? 'light' : 'dark'; updateTheme(next); setTheme(next); }
+  function signOut() { localStorage.removeItem('mockflow.session.token'); localStorage.removeItem('mockflow.session.email'); setToken(null); setEmail(''); setProjects([]); setProjectId(''); setApis([]); setEnvironments([]); setNotice('Signed out.'); }
+
+  return <main className="app-shell">
+    <style>{`.notice,.error{margin:0 0 18px;padding:10px 12px;border-radius:6px;font-size:13px}.notice{background:var(--accent-soft);color:var(--text);border:1px solid var(--border)}.error{background:#fff1f0;color:#a1261e;border:1px solid #f5c2be}:root[data-theme='dark'] .error{background:#341c1c;color:#fca5a5;border-color:#61302e}.form-panel{margin-bottom:18px}.form-grid{padding:18px}.form-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.form-fields label{display:grid;gap:6px;color:var(--muted);font-size:12px}.form-fields input,.form-fields select,.form-fields textarea,.project-picker{width:100%;min-height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);padding:6px 8px;outline:0}.form-fields textarea{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}.form-fields input:focus,.form-fields select:focus,.form-fields textarea:focus,.project-picker:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}.field-wide{grid-column:1/-1}.form-fields .button{justify-self:start}.form-busy{display:block;color:var(--muted);font-size:12px;margin-top:10px}.data-list,.api-list{display:grid}.data-row,.api-row{min-height:52px;padding:0 18px;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--border)}.data-row:last-child,.api-row:last-child{border-bottom:0}.data-row span{color:var(--muted);font-size:12px}.api-row{justify-content:space-between}.api-select{display:flex;align-items:center;gap:14px;min-width:0;flex:1;border:0;background:transparent;color:var(--text);text-align:left}.api-select code{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.api-select>span:last-child{margin-left:auto;color:var(--muted);font-size:12px}.method{width:48px;font-size:10px;font-weight:700}.method-get{color:#2563eb}.method-post{color:#15803d}.method-put,.method-patch{color:#a16207}.method-delete{color:var(--danger)}.nav-glyph{width:17px;text-align:center;font-size:11px;font-weight:700}.project-picker{width:auto;min-width:190px;border:0;background:transparent;color:var(--muted)}@media(max-width:760px){.form-fields{grid-template-columns:1fr}.data-row,.api-row{padding:10px 14px;align-items:flex-start;flex-wrap:wrap}.api-row .button{margin-left:62px}.project-picker{min-width:0;max-width:190px}}`}</style>
+    <aside className={`sidebar ${menu ? 'sidebar-open' : ''}`} aria-label="Main navigation">
+      <div className="brand"><span className="brand-mark">M</span><span>MockFlow</span></div>
+      <nav className="navigation"><p className="nav-label">Workspace</p>{views.slice(0, 4).map(([id, label]) => <button className={`nav-item ${view === id ? 'nav-item-active' : ''}`} key={id} onClick={() => { setView(id); setMenu(false); }} type="button"><NavGlyph name={id} /><span>{label}</span></button>)}</nav>
+      <div className="sidebar-footer"><button className={`nav-item ${view === 'settings' ? 'nav-item-active' : ''}`} onClick={() => setView('settings')} type="button"><NavGlyph name="settings" /><span>Settings</span></button><div className="account-row"><span className="account-avatar">{email ? email.slice(0, 1).toUpperCase() : '?'}</span><span className="account-copy"><strong>{email || 'Not signed in'}</strong><small>{token ? 'Control plane session' : 'Sign in to continue'}</small></span></div></div>
+    </aside>
+    <section className="workspace"><header className="topbar"><button className="icon-button menu-button" type="button" onClick={() => setMenu(!menu)} aria-label="Toggle navigation"><MenuGlyph /></button><select className="project-picker" value={projectId} onChange={(event) => setProjectId(event.target.value)} disabled={!token}><option value="">{token ? 'Select project' : 'Sign in first'}</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><div className="topbar-actions"><button className={`theme-toggle ${theme === 'dark' ? 'theme-toggle-dark' : ''}`} type="button" role="switch" aria-checked={theme === 'dark'} onClick={toggleTheme} aria-label="Toggle theme"><span className="theme-toggle-icon theme-toggle-sun"><SunGlyph /></span><span className="theme-toggle-icon theme-toggle-moon"><MoonGlyph /></span><span className="theme-toggle-knob" /></button></div></header>
+      <div className="content"><div className="page-heading"><div><h1>{views.find(([id]) => id === view)?.[1]}</h1><p>{descriptions[view]}</p></div>{token && view === 'apis' && project && <button className="button button-primary" type="button" onClick={() => document.getElementById('create-api')?.scrollIntoView({ behavior: 'smooth' })}>Create API</button>}</div>{notice && <p className="notice" role="status">{notice}</p>}{error && <p className="error" role="alert">{error}</p>}{!token ? <AuthPanel onAuthenticated={(value, signedInEmail) => { localStorage.setItem('mockflow.session.token', value); localStorage.setItem('mockflow.session.email', signedInEmail); setToken(value); setEmail(signedInEmail); setNotice('Signed in.'); }} onError={handleError} /> : <Dashboard view={view} project={project} projects={projects} apis={apis} environments={environments} selectedApi={selectedApi} scenarios={scenarios} client={client} refreshProjects={loadProjects} refreshProject={() => loadProjectData()} selectApi={setSelectedApiId} notify={setNotice} onError={handleError} signOut={signOut} />}</div></section>{menu && <button className="backdrop" type="button" aria-label="Close navigation" onClick={() => setMenu(false)} />}
+  </main>;
 }
 
-function DashboardContent({ view }: { view: View }) {
-  if (view === 'settings') return <section className="settings-list" aria-label="Project settings"><SettingRow label="Project access" description="Select a project to manage members and roles." /><SettingRow label="Runtime endpoint" description="Published endpoint settings become available after a project is selected." /><SettingRow label="Danger zone" description="Project deletion is unavailable until a project is selected." destructive /></section>;
-  if (view === 'requests') return <section className="panel request-panel"><div className="filter-row" aria-label="Request filters"><button className="filter-control" type="button" disabled>All methods <ChevronIcon /></button><button className="filter-control" type="button" disabled>All status codes <ChevronIcon /></button><button className="filter-control" type="button" disabled>All time <ChevronIcon /></button></div><EmptyState title="No request history" description="Request activity will appear here after a project and its published endpoints receive traffic." /></section>;
-  const tableTitle = view === 'apis' ? 'Endpoints' : view === 'environments' ? 'Environments' : 'Project activity';
-  const emptyTitle = view === 'apis' ? 'No endpoints to show' : view === 'environments' ? 'No environments to show' : 'No project selected';
-  const emptyDescription = view === 'apis' ? 'Select a project to create and manage its mock API endpoints.' : view === 'environments' ? 'Select a project to configure environment-specific mock scenarios.' : 'Choose a project from the control plane to begin managing its mock APIs.';
-  return <section className="panel"><div className="panel-header"><h2>{tableTitle}</h2></div>{view !== 'overview' && <div className="table-header" aria-hidden="true"><span>{view === 'apis' ? 'Method' : 'Name'}</span><span>{view === 'apis' ? 'Path' : 'Description'}</span><span>Status</span></div>}<EmptyState title={emptyTitle} description={emptyDescription} /></section>;
+function AuthPanel({ onAuthenticated, onError }: { onAuthenticated: (token: string, email: string) => void; onError: (cause: unknown) => void }) {
+  const [register, setRegister] = useState(false); const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); const form = new FormData(event.currentTarget); const email = String(form.get('email')); try { const client = new ControlPlaneClient(); const session = register ? await client.register(email, String(form.get('password')), String(form.get('displayName'))) : await client.signIn(email, String(form.get('password'))); onAuthenticated(session.token, email); } catch (cause) { onError(cause); } finally { setBusy(false); } }
+  return <section className="panel auth-panel"><div className="panel-header"><h2>{register ? 'Create account' : 'Sign in'}</h2></div><form className="form-grid" onSubmit={submit}>{register && <label>Display name<input name="displayName" required minLength={1} maxLength={120} /></label>}<label>Email<input name="email" type="email" required /></label><label>Password<input name="password" type="password" required minLength={12} /></label><div className="form-actions"><button className="button button-primary" disabled={busy}>{busy ? 'Working…' : register ? 'Create account' : 'Sign in'}</button><button className="button button-secondary" type="button" onClick={() => setRegister(!register)}>{register ? 'Use existing account' : 'Create account'}</button></div></form></section>;
 }
 
-function EmptyState({ title, description }: { title: string; description: string }) { return <div className="empty-state"><div className="empty-mark" aria-hidden="true"><ApiIcon /></div><h3>{title}</h3><p>{description}</p></div>; }
-function SettingRow({ label, description, destructive = false }: { label: string; description: string; destructive?: boolean }) { return <div className="setting-row"><div><h2>{label}</h2><p>{description}</p></div><button className={`button button-secondary ${destructive ? 'button-destructive' : ''}`} type="button" disabled>Unavailable</button></div>; }
-function GridIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>; }
-function ApiIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18-6-6 6-6M15 6l6 6-6 6M14 4l-4 16" /></svg>; }
-function LayersIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5" /></svg>; }
-function HistoryIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3.5 2" /></svg>; }
-function SettingsIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.3 2.3-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-3.2v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L6 17l.1-.1A1.7 1.7 0 0 0 6.4 15a1.7 1.7 0 0 0-1.5-1H4.7v-3.2h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L6 7.8 8.3 5l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h3.2v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 2.3 2.3-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z" /></svg>; }
-function SunIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>; }
-function MoonIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 8.5 8.5 0 1 0 20.7 15.1Z" /></svg>; }
-function ChevronIcon() { return <svg className="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>; }
-function MenuIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>; }
+function Dashboard(props: { view: View; project?: Project; projects: Project[]; apis: ApiDefinition[]; environments: Environment[]; selectedApi?: ApiDefinition; scenarios: Scenario[]; client: ControlPlaneClient; refreshProjects: () => Promise<void>; refreshProject: () => Promise<void>; selectApi: (id: string) => void; notify: (message: string) => void; onError: (cause: unknown) => void; signOut: () => void }) {
+  const { view, project, projects, apis, environments, selectedApi, scenarios, client, refreshProjects, refreshProject, selectApi, notify, onError, signOut } = props;
+  if (view === 'settings') return <section className="settings-list"><Setting title="Session" description="Your token is stored only in this browser." action="Sign out" onClick={signOut} /><Setting title="Project access" description={project ? `Your role: ${project.role}. Access is enforced by the control plane.` : 'Select a project to inspect access.'} /></section>;
+  if (view === 'overview') return <><CreateProject client={client} onSaved={async () => { await refreshProjects(); notify('Project created.'); }} onError={onError} /><section className="panel"><div className="panel-header"><h2>Projects</h2></div>{projects.length ? <div className="data-list">{projects.map((item) => <div className="data-row" key={item.id}><strong>{item.name}</strong><span>/{item.slug}</span><span>{item.role}</span></div>)}</div> : <Empty title="No projects yet" description="Create a project to begin managing mock APIs." />}</section></>;
+  if (!project) return <section className="panel"><Empty title="Select a project" description="Choose a project from the top bar before managing its configuration." /></section>;
+  if (view === 'apis') return <><CreateApi project={project} client={client} onSaved={async () => { await refreshProject(); notify('API draft created.'); }} onError={onError} /><section className="panel"><div className="panel-header"><h2>Endpoints</h2></div>{apis.length ? <div className="api-list">{apis.map((api) => <div className={`api-row ${api.id === selectedApi?.id ? 'api-row-active' : ''}`} key={api.id}><button type="button" className="api-select" onClick={() => selectApi(api.id)}><span className={`method method-${api.method.toLowerCase()}`}>{api.method}</span><code>{api.path}</code><span>{api.isPublished ? 'Published' : 'Draft'}</span></button><button className="button button-secondary" type="button" onClick={async () => { try { await client.updateApi(api.id, { isPublished: !api.isPublished }); await refreshProject(); notify(api.isPublished ? 'Endpoint unpublished.' : 'Endpoint published.'); } catch (cause) { onError(cause); } }}>{api.isPublished ? 'Unpublish' : 'Publish'}</button></div>)}</div> : <Empty title="No endpoints" description="Create an API draft to define a mock endpoint." />}</section>{selectedApi && <ScenarioEditor api={selectedApi} scenarios={scenarios} client={client} onSaved={async () => { await refreshProject(); notify('Scenario saved.'); }} onError={onError} project={project} />}</>;
+  if (view === 'environments') return <><CreateEnvironment project={project} client={client} onSaved={async () => { await refreshProject(); notify('Environment created.'); }} onError={onError} /><section className="panel"><div className="panel-header"><h2>Environments</h2></div>{environments.length ? <div className="data-list">{environments.map((item) => <div className="data-row" key={item.id}><strong>{item.name}</strong><span>Scenario overrides are configured per endpoint.</span></div>)}</div> : <Empty title="No environments" description="Create an environment to prepare scenario overrides." />}</section></>;
+  return <section className="panel"><div className="panel-header"><h2>Request history</h2></div><Empty title="Request history is not exposed yet" description="The runtime records redacted request logs. Add the control-plane read endpoint before surfacing them in the dashboard." /></section>;
+}
+
+function CreateProject({ client, onSaved, onError }: { client: ControlPlaneClient; onSaved: () => Promise<void>; onError: (cause: unknown) => void }) { return <FormPanel title="New project" onSubmit={async (form) => { try { await client.createProject({ name: String(form.get('name')), slug: String(form.get('slug')) }); await onSaved(); } catch (cause) { onError(cause); } }}><label>Name<input name="name" required maxLength={120} /></label><label>Slug<input name="slug" required pattern="[a-z0-9-]+" maxLength={120} /></label><button className="button button-primary">Create project</button></FormPanel>; }
+function CreateApi({ project, client, onSaved, onError }: { project: Project; client: ControlPlaneClient; onSaved: () => Promise<void>; onError: (cause: unknown) => void }) { return <FormPanel title="New endpoint" id="create-api" onSubmit={async (form) => { try { await client.createApi(project.id, { name: String(form.get('name')), method: String(form.get('method')), path: String(form.get('path')), description: String(form.get('description')) || undefined }); await onSaved(); } catch (cause) { onError(cause); } }}><label>Name<input name="name" required maxLength={120} /></label><label>Method<select name="method">{methods.map((method) => <option key={method}>{method}</option>)}</select></label><label>Path<input name="path" required pattern="/.*" placeholder="/users" /></label><label>Description<input name="description" maxLength={500} /></label><button className="button button-primary">Create draft</button></FormPanel>; }
+function CreateEnvironment({ project, client, onSaved, onError }: { project: Project; client: ControlPlaneClient; onSaved: () => Promise<void>; onError: (cause: unknown) => void }) { return <FormPanel title="New environment" onSubmit={async (form) => { try { await client.createEnvironment(project.id, String(form.get('name'))); await onSaved(); } catch (cause) { onError(cause); } }}><label>Name<input name="name" required maxLength={120} placeholder="Staging" /></label><button className="button button-primary">Create environment</button></FormPanel>; }
+function ScenarioEditor({ api, scenarios, client, onSaved, onError, project }: { api: ApiDefinition; scenarios: Scenario[]; client: ControlPlaneClient; onSaved: () => Promise<void>; onError: (cause: unknown) => void; project: Project }) { return <><section className="panel"><div className="panel-header"><h2>Scenarios for <code>{api.path}</code></h2></div>{scenarios.length ? <div className="data-list">{scenarios.map((item) => <div className="data-row" key={item.id}><strong>{item.name}</strong><span>{item.statusCode} · {item.isDefault ? 'Default' : item.type}</span></div>)}</div> : <Empty title="No response scenarios" description="Add at least one scenario before publishing this endpoint." />}</section><FormPanel title="Add scenario" onSubmit={async (form) => { try { const body = String(form.get('body')); await client.createScenario(api.id, { name: String(form.get('name')), type: 'SUCCESS', statusCode: Number(form.get('statusCode')), headers: { 'content-type': 'application/json' }, body: body ? JSON.parse(body) : null, delayMs: 0, isDefault: scenarios.length === 0 }); await onSaved(); } catch (cause) { onError(cause); } }}><label>Name<input name="name" required defaultValue="Default response" /></label><label>Status<input name="statusCode" type="number" defaultValue="200" min="100" max="599" required /></label><label className="field-wide">JSON body<textarea name="body" rows={5} placeholder='{"ok": true}' /></label><button className="button button-primary">Save scenario</button><button className="button button-secondary" type="button" onClick={async () => { try { const response = await fetch(`/runtime/p/${project.slug}${api.path}`, { method: api.method }); const text = await response.text(); alert(`${response.status}\n${text}`); } catch { onError(new Error('Could not reach the mock runtime.')); } }}>Test endpoint</button></FormPanel></>; }
+function FormPanel({ title, children, onSubmit, id }: { title: string; children: React.ReactNode; onSubmit: (form: FormData) => Promise<void>; id?: string }) { const [busy, setBusy] = useState(false); return <section className="panel form-panel" id={id}><div className="panel-header"><h2>{title}</h2></div><form className="form-grid" onSubmit={async (event) => { event.preventDefault(); setBusy(true); await onSubmit(new FormData(event.currentTarget)); setBusy(false); }}><div className="form-fields">{children}</div>{busy && <span className="form-busy">Saving…</span>}</form></section>; }
+function Setting({ title, description, action, onClick }: { title: string; description: string; action?: string; onClick?: () => void }) { return <div className="setting-row"><div><h2>{title}</h2><p>{description}</p></div>{action && <button className="button button-secondary" type="button" onClick={onClick}>{action}</button>}</div>; }
+function Empty({ title, description }: { title: string; description: string }) { return <div className="empty-state"><div className="empty-mark">⌘</div><h3>{title}</h3><p>{description}</p></div>; }
+function NavGlyph({ name }: { name: string }) { return <span aria-hidden="true" className="nav-glyph">{name.slice(0, 1).toUpperCase()}</span>; }
+function MenuGlyph() { return <span aria-hidden="true">☰</span>; }
+function SunGlyph() { return <span aria-hidden="true">☼</span>; }
+function MoonGlyph() { return <span aria-hidden="true">◐</span>; }
