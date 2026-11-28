@@ -1,13 +1,23 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuthSession } from './auth-provider';
 import { BrandMark } from './brand';
+import { MenuIcon } from './icons';
 import { ThemeToggle } from './theme-toggle';
+
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/capabilities', label: 'Capabilities' },
+  { href: '/workflow', label: 'Workflow' },
+  { href: '/extension', label: 'VS Code Extension' },
+];
 
 export function LandingNav() {
   const { status } = useAuthSession();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -16,15 +26,20 @@ export function LandingNav() {
         <BrandMark href="/" />
 
         <nav className={`public-nav ${menuOpen ? 'public-nav-open' : ''}`} aria-label="Primary">
-          <a href="#capabilities" onClick={() => setMenuOpen(false)}>
-            Capabilities
-          </a>
-          <a href="#workflow" onClick={() => setMenuOpen(false)}>
-            Workflow
-          </a>
-          <a href="#extension" onClick={() => setMenuOpen(false)}>
-            VS Code Extension
-          </a>
+          {navLinks.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={active ? 'public-nav-active' : undefined}
+                aria-current={active ? 'page' : undefined}
+                onClick={() => setMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="public-header-actions">
@@ -50,7 +65,7 @@ export function LandingNav() {
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((prev) => !prev)}
           >
-            <span aria-hidden="true">☰</span>
+            <MenuIcon />
           </button>
         </div>
       </div>

@@ -10,6 +10,14 @@ import { ProjectsView } from '../components/dashboard/projects-view';
 import { RequestHistoryView } from '../components/dashboard/request-history-view';
 import { SettingsView } from '../components/dashboard/settings-view';
 import { Empty } from '../components/dashboard/shared';
+import {
+  ApiIcon,
+  EnvironmentIcon,
+  HistoryIcon,
+  MenuIcon,
+  OverviewIcon,
+  SettingsIcon,
+} from '../components/icons';
 import { ThemeToggle } from '../components/theme-toggle';
 import {
   ApiDefinition,
@@ -30,6 +38,21 @@ const views: Array<[View, string]> = [
   ['requests', 'Request history'],
   ['settings', 'Settings'],
 ];
+
+function NavIcon({ view }: { view: View }) {
+  switch (view) {
+    case 'overview':
+      return <OverviewIcon width={15} height={15} />;
+    case 'apis':
+      return <ApiIcon width={15} height={15} />;
+    case 'environments':
+      return <EnvironmentIcon width={15} height={15} />;
+    case 'requests':
+      return <HistoryIcon width={15} height={15} />;
+    case 'settings':
+      return <SettingsIcon width={15} height={15} />;
+  }
+}
 
 const descriptions: Record<View, string> = {
   overview: 'Projects available to your current control-plane session.',
@@ -232,7 +255,9 @@ export default function DashboardPage() {
   return (
     <main className="app-shell">
       <aside className={`sidebar ${menu ? 'sidebar-open' : ''}`} aria-label="Main navigation">
-        <BrandMark href="/" />
+        <div className="sidebar-brand">
+          <BrandMark href="/" />
+        </div>
         <nav className="navigation">
           <p className="nav-label">Workspace</p>
           {views.slice(0, 4).map(([id, label]) => (
@@ -245,9 +270,7 @@ export default function DashboardPage() {
               }}
               type="button"
             >
-              <span aria-hidden="true" className="nav-glyph">
-                {id.slice(0, 1).toUpperCase()}
-              </span>
+              <NavIcon view={id} />
               <span>{label}</span>
             </button>
           ))}
@@ -261,9 +284,7 @@ export default function DashboardPage() {
             }}
             type="button"
           >
-            <span aria-hidden="true" className="nav-glyph">
-              S
-            </span>
+            <NavIcon view="settings" />
             <span>Settings</span>
           </button>
           <div className="account-row">
@@ -278,35 +299,37 @@ export default function DashboardPage() {
 
       <section className="workspace">
         <header className="topbar">
-          <button
-            className="icon-button menu-button"
-            type="button"
-            onClick={() => setMenu(!menu)}
-            aria-label="Toggle navigation"
-          >
-            <span aria-hidden="true">☰</span>
-          </button>
+          <div className="topbar-left">
+            <button
+              className="icon-button menu-button"
+              type="button"
+              onClick={() => setMenu(!menu)}
+              aria-label="Toggle navigation"
+            >
+              <MenuIcon />
+            </button>
 
-          <select
-            aria-label="Active project"
-            className="project-picker"
-            value={projectId}
-            onChange={(event) => {
-              setProjectId(event.target.value);
-              setNotice(null);
-              setError(null);
-            }}
-            disabled={loadingProjects}
-          >
-            <option value="">
-              {loadingProjects ? 'Loading projects…' : 'Select project'}
-            </option>
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
+            <select
+              aria-label="Active project"
+              className="project-picker"
+              value={projectId}
+              onChange={(event) => {
+                setProjectId(event.target.value);
+                setNotice(null);
+                setError(null);
+              }}
+              disabled={loadingProjects}
+            >
+              <option value="">
+                {loadingProjects ? 'Loading projects…' : 'Select project'}
               </option>
-            ))}
-          </select>
+              {projects.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="topbar-actions">
             <ThemeToggle />

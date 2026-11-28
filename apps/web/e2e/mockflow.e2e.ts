@@ -90,7 +90,7 @@ test.describe.serial('MockFlow End-to-End Flow', () => {
     }
   });
 
-  test('1. Landing page renders sections, navigation, theme toggle, and CTAs', async ({ page }) => {
+  test('1. Landing page, dedicated public routes, theme toggle, and extension download', async ({ page }) => {
     const tracker = attachErrorTracker(page);
     await page.goto('/');
 
@@ -101,17 +101,35 @@ test.describe.serial('MockFlow End-to-End Flow', () => {
     ).toBeVisible();
 
     const header = page.locator('header.public-header');
+    await expect(header.getByRole('link', { name: 'Home' })).toBeVisible();
     await expect(header.getByRole('link', { name: 'Capabilities' })).toBeVisible();
     await expect(header.getByRole('link', { name: 'Workflow' })).toBeVisible();
     await expect(header.getByRole('link', { name: 'VS Code Extension' })).toBeVisible();
     await expect(header.getByRole('link', { name: 'Sign in' })).toBeVisible();
     await expect(header.getByRole('link', { name: 'Get started' })).toBeVisible();
-
-    await expect(page.locator('#capabilities')).toBeVisible();
-    await expect(page.locator('#workflow')).toBeVisible();
-    await expect(page.locator('#extension')).toBeVisible();
-    await expect(page.getByText('MockFlow: Scan Workspace for APIs')).toBeVisible();
     await expect(page.locator('footer.public-footer')).toBeVisible();
+
+    await header.getByRole('link', { name: 'Capabilities' }).click();
+    await expect(page).toHaveURL(/\/capabilities$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Everything built into MockFlow');
+
+    await header.getByRole('link', { name: 'Workflow' }).click();
+    await expect(page).toHaveURL(/\/workflow$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('From local route draft');
+
+    await header.getByRole('link', { name: 'VS Code Extension' }).click();
+    await expect(page).toHaveURL(/\/extension$/);
+    await expect(page.getByText('MockFlow: Scan Workspace for APIs').first()).toBeVisible();
+    const downloadLink = page.getByRole('link', { name: /Download \.vsix/i });
+    await expect(downloadLink).toHaveAttribute(
+      'href',
+      '/downloads/mockflow-vscode-extension-0.1.0.vsix',
+    );
+    const vsixRes = await page.request.get('/downloads/mockflow-vscode-extension-0.1.0.vsix');
+    expect(vsixRes.status()).toBe(200);
+
+    await header.getByRole('link', { name: 'Home' }).click();
+    await expect(page).toHaveURL(/\/$/);
 
     const themeSwitch = page.getByRole('switch', { name: 'Toggle theme' });
     const initialTheme = await page.evaluate(() => document.documentElement.dataset.theme);

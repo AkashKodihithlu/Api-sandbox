@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MoonIcon, SunIcon } from './icons';
 
 type Theme = 'light' | 'dark';
 
@@ -34,12 +35,13 @@ export function ThemeToggle() {
       aria-checked={theme === 'dark'}
       onClick={toggleTheme}
       aria-label="Toggle theme"
+      title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
     >
       <span className="theme-toggle-icon theme-toggle-sun">
-        <span aria-hidden="true">☼</span>
+        <SunIcon width={12} height={12} />
       </span>
       <span className="theme-toggle-icon theme-toggle-moon">
-        <span aria-hidden="true">◐</span>
+        <MoonIcon width={12} height={12} />
       </span>
       <span className="theme-toggle-knob" />
     </button>

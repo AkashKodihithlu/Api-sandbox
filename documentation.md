@@ -117,17 +117,6 @@ The VS Code extension adds an API Discovery tree and commands to scan the curren
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 ## Phase 6 — Mock Generation and Publishing
 
 In Phase 6, I implemented the mock generation and publishing workflow within the VS Code extension, connecting API discovery with draft API creation, scenario configuration, publishing controls, and runtime testing. The goal was to make it easier to turn discovered API endpoints into configurable mocks and publish them for testing without requiring users to manually create every API definition from scratch.

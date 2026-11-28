@@ -2,6 +2,7 @@
 
 import { FormEvent, ReactNode, useRef, useState } from 'react';
 import { Project } from '../../lib/control-plane';
+import { TerminalIcon } from '../icons';
 
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
@@ -79,7 +80,7 @@ export function Empty({ title, description }: { title: string; description: stri
   return (
     <div className="empty-state">
       <div className="empty-mark" aria-hidden="true">
-        ⌘
+        <TerminalIcon width={16} height={16} />
       </div>
       <h3>{title}</h3>
       <p>{description}</p>
