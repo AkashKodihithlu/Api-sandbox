@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { AuthProvider } from './components/auth-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MockFlow',
-  description: 'Mock API control plane',
+  title: 'MockFlow — Mock API Control Plane & Runtime',
+  description:
+    'Create, configure, publish, and test scenario-driven mock APIs without waiting for a backend.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -17,7 +19,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

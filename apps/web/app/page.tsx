@@ -1,1043 +1,265 @@
-'use client';
+import Link from 'next/link';
+import { LandingNav } from './components/landing-nav';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import {
-  ApiDefinition,
-  ControlPlaneClient,
-  ControlPlaneError,
-  Environment,
-  Project,
-  RequestLog,
-  Scenario,
-} from './lib/control-plane';
-import {
-  clearStoredSession,
-  getPasswordMinLength,
-  readStoredSession,
-  validateStoredSession,
-  writeStoredSession,
-} from './lib/session';
-
-type View = 'overview' | 'apis' | 'environments' | 'requests' | 'settings';
-type Theme = 'light' | 'dark';
-const views: Array<[View, string]> = [
-  ['overview', 'Overview'],
-  ['apis', 'APIs'],
-  ['environments', 'Environments'],
-  ['requests', 'Request history'],
-  ['settings', 'Settings'],
+const capabilities = [
+  {
+    title: 'Project workspaces & RBAC',
+    description:
+      'Organize mock APIs under isolated project slugs with Owner, Editor, and Viewer access enforced by the control plane.',
+  },
+  {
+    title: 'Draft & publish lifecycle',
+    description:
+      'Define GET, POST, PUT, PATCH, and DELETE routes, configure responses in draft mode, and publish when ready.',
+  },
+  {
+    title: 'Scenario-driven responses',
+    description:
+      'Configure status codes, custom headers, JSON payloads, and artificial delays (up to 10,000 ms) across SUCCESS, EMPTY, and error states.',
+  },
+  {
+    title: 'Named environments',
+    description:
+      'Create environments like Staging or QA and bind per-endpoint scenario overrides via the x-mockflow-environment header.',
+  },
+  {
+    title: 'Live runtime testing',
+    description:
+      'Send requests directly to /runtime/p/{project-slug}/{path} from the dashboard and inspect status, headers, and formatted JSON.',
+  },
+  {
+    title: 'Redacted request history',
+    description:
+      'Inspect recorded runtime traffic with automatic header redaction, latency metrics, method/status filters, and pagination.',
+  },
 ];
-const descriptions: Record<View, string> = {
-  overview: 'Projects available to your current control-plane session.',
-  apis: 'Create, publish, test, and configure mock endpoints.',
-  environments: 'Configure named environment context for a project.',
-  requests: 'Inspect redacted traffic when request history is available.',
-  settings: 'Manage your local dashboard session.',
-};
-const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
-function setTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem('mockflow.theme', theme);
-}
+const extensionFeatures = [
+  'Workspace API discovery: scan your local codebase for routes, review findings, or ignore false positives.',
+  'Projects & API Discovery tree views right inside the VS Code activity bar.',
+  'Configure endpoints, response scenarios, and request JSON Schemas without leaving the editor.',
+  'Publish or unpublish endpoints, copy hosted runtime URLs, and run live endpoint tests from VS Code commands.',
+];
 
-export default function HomePage() {
-  const [view, setView] = useState<View>('overview');
-  const [theme, updateTheme] = useState<Theme>('light');
-  const [menu, setMenu] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('');
-  const [apis, setApis] = useState<ApiDefinition[]>([]);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [requestLogs, setRequestLogs] = useState<RequestLog[]>([]);
-  const [selectedApiId, setSelectedApiId] = useState('');
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [sessionChecking, setSessionChecking] = useState(true);
-
-  const client = useMemo(() => new ControlPlaneClient(token ?? undefined), [token]);
-  const project = projects.find((item) => item.id === projectId);
-  const selectedApi = apis.find((item) => item.id === selectedApiId);
-
-  async function loadProjects(activeClient = client) {
-    try {
-      setError(null);
-      const data = await activeClient.projects();
-      setProjects(data);
-      setProjectId((current) => current || data[0]?.id || '');
-    } catch (cause) {
-      handleError(cause);
-    }
-  }
-  async function loadProjectData(id = projectId) {
-    if (!id) {
-      setApis([]);
-      setEnvironments([]);
-      setRequestLogs([]);
-      return;
-    }
-    try {
-      setError(null);
-      const [apiData, environmentData, history] = await Promise.all([
-        client.apis(id),
-        client.environments(id),
-        client.requestHistory(id),
-      ]);
-      setApis(apiData);
-      setEnvironments(environmentData);
-      setRequestLogs(history.data);
-      setSelectedApiId((current) =>
-        apiData.some((api) => api.id === current) ? current : apiData[0]?.id || '',
-      );
-    } catch (cause) {
-      handleError(cause);
-    }
-  }
-  async function loadScenarios(id = selectedApiId) {
-    if (!id) {
-      setScenarios([]);
-      return;
-    }
-    try {
-      setScenarios(await client.scenarios(id));
-    } catch (cause) {
-      handleError(cause);
-    }
-  }
-  function resetSessionState(options: {
-    noticeMessage?: string | null;
-    errorMessage?: string | null;
-  }) {
-    clearStoredSession(localStorage);
-    setToken(null);
-    setEmail('');
-    setProjects([]);
-    setProjectId('');
-    setApis([]);
-    setEnvironments([]);
-    setRequestLogs([]);
-    setSelectedApiId('');
-    setScenarios([]);
-    setNotice(options.noticeMessage ?? null);
-    setError(options.errorMessage ?? null);
-  }
-
-  function handleError(cause: unknown) {
-    if (cause instanceof ControlPlaneError && cause.status === 401 && token) {
-      resetSessionState({ errorMessage: 'Your session has expired. Please sign in again.' });
-      return;
-    }
-    setError(
-      cause instanceof ControlPlaneError ? cause.message : 'Could not reach the control plane.',
-    );
-  }
-
-  useEffect(() => {
-    let active = true;
-    const initial = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-    const saved = localStorage.getItem('mockflow.theme') as Theme | null;
-    updateTheme(saved ?? initial);
-    setTheme(saved ?? initial);
-
-    const stored = readStoredSession(localStorage);
-    if (stored.token) {
-      const candidateToken = stored.token;
-      void validateStoredSession(new ControlPlaneClient(candidateToken), localStorage).then(
-        (result) => {
-          if (!active) return;
-          if (result.valid) {
-            setToken(candidateToken);
-            setEmail(result.email || stored.email);
-            setError(null);
-          } else if (result.reason === 'unauthorized') {
-            // An invalid/expired token is cleared by validateStoredSession.
-            resetSessionState({ errorMessage: result.message });
-          } else {
-            // Preserve credentials when verification failed for a transient reason.
-            setError(result.message);
-            setNotice(null);
-          }
-          setSessionChecking(false);
-        },
-      ).catch((cause: unknown) => {
-        if (!active) return;
-        setError(cause instanceof Error ? cause.message : 'Could not verify your session.');
-        setSessionChecking(false);
-      });
-    } else {
-      setSessionChecking(false);
-    }
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (token) void loadProjects(new ControlPlaneClient(token));
-  }, [token]);
-  useEffect(() => {
-    if (token) void loadProjectData();
-  }, [projectId]);
-  useEffect(() => {
-    if (token) void loadScenarios();
-  }, [selectedApiId]);
-
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    updateTheme(next);
-    setTheme(next);
-  }
-  function signOut() {
-    resetSessionState({ noticeMessage: 'Signed out.' });
-  }
-
+export default function LandingPage() {
   return (
-    <main className="app-shell">
-      <style>{`.notice,.error{margin:0 0 18px;padding:10px 12px;border-radius:6px;font-size:13px}.notice{background:var(--accent-soft);color:var(--text);border:1px solid var(--border)}.error{background:#fff1f0;color:#a1261e;border:1px solid #f5c2be}:root[data-theme='dark'] .error{background:#341c1c;color:#fca5a5;border-color:#61302e}.form-panel{margin-bottom:18px}.form-grid{padding:18px}.form-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.form-fields label{display:grid;gap:6px;color:var(--muted);font-size:12px}.form-fields input,.form-fields select,.form-fields textarea,.project-picker{width:100%;min-height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);padding:6px 8px;outline:0}.form-fields textarea{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}.form-fields input:focus,.form-fields select:focus,.form-fields textarea:focus,.project-picker:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}.field-wide{grid-column:1/-1}.form-fields .button{justify-self:start}.form-busy{display:block;color:var(--muted);font-size:12px;margin-top:10px}.data-list,.api-list{display:grid}.data-row,.api-row{min-height:52px;padding:0 18px;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--border)}.data-row:last-child,.api-row:last-child{border-bottom:0}.data-row span{color:var(--muted);font-size:12px}.api-row{justify-content:space-between}.api-select{display:flex;align-items:center;gap:14px;min-width:0;flex:1;border:0;background:transparent;color:var(--text);text-align:left}.api-select code{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.api-select>span:last-child{margin-left:auto;color:var(--muted);font-size:12px}.method{width:48px;font-size:10px;font-weight:700}.method-get{color:#2563eb}.method-post{color:#15803d}.method-put,.method-patch{color:#a16207}.method-delete{color:var(--danger)}.nav-glyph{width:17px;text-align:center;font-size:11px;font-weight:700}.project-picker{width:auto;min-width:190px;border:0;background:transparent;color:var(--muted)}@media(max-width:760px){.form-fields{grid-template-columns:1fr}.data-row,.api-row{padding:10px 14px;align-items:flex-start;flex-wrap:wrap}.api-row .button{margin-left:62px}.project-picker{min-width:0;max-width:190px}}`}</style>
-      <aside className={`sidebar ${menu ? 'sidebar-open' : ''}`} aria-label="Main navigation">
-        <div className="brand">
-          <span className="brand-mark">M</span>
-          <span>MockFlow</span>
-        </div>
-        <nav className="navigation">
-          <p className="nav-label">Workspace</p>
-          {views.slice(0, 4).map(([id, label]) => (
-            <button
-              className={`nav-item ${view === id ? 'nav-item-active' : ''}`}
-              key={id}
-              onClick={() => {
-                setView(id);
-                setMenu(false);
-              }}
-              type="button"
-            >
-              <NavGlyph name={id} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button
-            className={`nav-item ${view === 'settings' ? 'nav-item-active' : ''}`}
-            onClick={() => setView('settings')}
-            type="button"
-          >
-            <NavGlyph name="settings" />
-            <span>Settings</span>
-          </button>
-          <div className="account-row">
-            <span className="account-avatar">{email ? email.slice(0, 1).toUpperCase() : '?'}</span>
-            <span className="account-copy">
-              <strong>{email || 'Not signed in'}</strong>
-              <small>{token ? 'Control plane session' : 'Sign in to continue'}</small>
-            </span>
-          </div>
-        </div>
-      </aside>
-      <section className="workspace">
-        <header className="topbar">
-          <button
-            className="icon-button menu-button"
-            type="button"
-            onClick={() => setMenu(!menu)}
-            aria-label="Toggle navigation"
-          >
-            <MenuGlyph />
-          </button>
-          <select
-            className="project-picker"
-            value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-            disabled={!token}
-          >
-            <option value="">{token ? 'Select project' : 'Sign in first'}</option>
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <div className="topbar-actions">
-            <button
-              className={`theme-toggle ${theme === 'dark' ? 'theme-toggle-dark' : ''}`}
-              type="button"
-              role="switch"
-              aria-checked={theme === 'dark'}
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              <span className="theme-toggle-icon theme-toggle-sun">
-                <SunGlyph />
-              </span>
-              <span className="theme-toggle-icon theme-toggle-moon">
-                <MoonGlyph />
-              </span>
-              <span className="theme-toggle-knob" />
-            </button>
-          </div>
-        </header>
-        <div className="content">
-          <div className="page-heading">
-            <div>
-              <h1>{views.find(([id]) => id === view)?.[1]}</h1>
-              <p>{descriptions[view]}</p>
-            </div>
-            {token && view === 'apis' && project && (
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() =>
-                  document.getElementById('create-api')?.scrollIntoView({ behavior: 'smooth' })
-                }
-              >
-                Create API
-              </button>
-            )}
-          </div>
-          {notice && (
-            <p className="notice" role="status">
-              {notice}
-            </p>
-          )}
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
-          {sessionChecking ? (
-            <section className="panel" role="status">
-              <Empty title="Checking session" description="Verifying your saved session with the control plane…" />
-            </section>
-          ) : !token ? (
-            <AuthPanel
-              onAuthenticated={(value, signedInEmail) => {
-                writeStoredSession(localStorage, value, signedInEmail);
-                setError(null);
-                setToken(value);
-                setEmail(signedInEmail);
-                setNotice('Signed in.');
-              }}
-              onClearMessages={() => {
-                setError(null);
-                setNotice(null);
-              }}
-              onError={handleError}
-            />
-          ) : (
-            <Dashboard
-              view={view}
-              project={project}
-              projects={projects}
-              apis={apis}
-              environments={environments}
-              requestLogs={requestLogs}
-              selectedApi={selectedApi}
-              scenarios={scenarios}
-              client={client}
-              refreshProjects={loadProjects}
-              refreshProject={() => loadProjectData()}
-              selectApi={setSelectedApiId}
-              notify={setNotice}
-              onError={handleError}
-              signOut={signOut}
-            />
-          )}
-        </div>
-      </section>
-      {menu && (
-        <button
-          className="backdrop"
-          type="button"
-          aria-label="Close navigation"
-          onClick={() => setMenu(false)}
-        />
-      )}
-    </main>
-  );
-}
+    <div className="landing-page">
+      <LandingNav />
 
-function AuthPanel({
-  onAuthenticated,
-  onClearMessages,
-  onError,
-}: {
-  onAuthenticated: (token: string, email: string) => void;
-  onClearMessages: () => void;
-  onError: (cause: unknown) => void;
-}) {
-  const [register, setRegister] = useState(false);
-  const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onClearMessages();
-    setBusy(true);
-    const form = new FormData(event.currentTarget);
-    const email = String(form.get('email'));
-    try {
-      const client = new ControlPlaneClient();
-      const session = register
-        ? await client.register(
-          email,
-          String(form.get('password')),
-          String(form.get('displayName')),
-        )
-        : await client.signIn(email, String(form.get('password')));
-      onAuthenticated(session.token, session.user.email || email);
-    } catch (cause) {
-      onError(cause);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <section className="panel auth-panel">
-      <div className="panel-header">
-        <h2>{register ? 'Create account' : 'Sign in'}</h2>
-      </div>
-      <form className="form-grid" onSubmit={submit}>
-        {register && (
-          <label>
-            Display name
-            <input name="displayName" required minLength={1} maxLength={120} />
-          </label>
-        )}
-        <label>
-          Email
-          <input name="email" type="email" required />
-        </label>
-        <label>
-          Password
-          <input
-            name="password"
-            type="password"
-            required
-            minLength={getPasswordMinLength(register)}
-            maxLength={256}
-          />
-        </label>
-        <div className="form-actions">
-          <button className="button button-primary" disabled={busy}>
-            {busy ? 'Working…' : register ? 'Create account' : 'Sign in'}
-          </button>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => {
-              onClearMessages();
-              setRegister(!register);
-            }}
-          >
-            {register ? 'Use existing account' : 'Create account'}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
-
-function Dashboard(props: {
-  view: View;
-  project?: Project;
-  projects: Project[];
-  apis: ApiDefinition[];
-  environments: Environment[];
-  requestLogs: RequestLog[];
-  selectedApi?: ApiDefinition;
-  scenarios: Scenario[];
-  client: ControlPlaneClient;
-  refreshProjects: () => Promise<void>;
-  refreshProject: () => Promise<void>;
-  selectApi: (id: string) => void;
-  notify: (message: string) => void;
-  onError: (cause: unknown) => void;
-  signOut: () => void;
-}) {
-  const {
-    view,
-    project,
-    projects,
-    apis,
-    environments,
-    requestLogs,
-    selectedApi,
-    scenarios,
-    client,
-    refreshProjects,
-    refreshProject,
-    selectApi,
-    notify,
-    onError,
-    signOut,
-  } = props;
-  if (view === 'settings')
-    return (
-      <section className="settings-list">
-        <Setting
-          title="Session"
-          description="Your token is stored only in this browser."
-          action="Sign out"
-          onClick={signOut}
-        />
-        <Setting
-          title="Project access"
-          description={
-            project
-              ? `Your role: ${project.role}. Access is enforced by the control plane.`
-              : 'Select a project to inspect access.'
-          }
-        />
-      </section>
-    );
-  if (view === 'overview')
-    return (
-      <>
-        <CreateProject
-          client={client}
-          onSaved={async () => {
-            await refreshProjects();
-            notify('Project created.');
-          }}
-          onError={onError}
-        />
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Projects</h2>
-          </div>
-          {projects.length ? (
-            <div className="data-list">
-              {projects.map((item) => (
-                <div className="data-row" key={item.id}>
-                  <strong>{item.name}</strong>
-                  <span>/{item.slug}</span>
-                  <span>{item.role}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              title="No projects yet"
-              description="Create a project to begin managing mock APIs."
-            />
-          )}
-        </section>
-      </>
-    );
-  if (!project)
-    return (
-      <section className="panel">
-        <Empty
-          title="Select a project"
-          description="Choose a project from the top bar before managing its configuration."
-        />
-      </section>
-    );
-  if (view === 'apis')
-    return (
-      <>
-        <CreateApi
-          project={project}
-          client={client}
-          onSaved={async () => {
-            await refreshProject();
-            notify('API draft created.');
-          }}
-          onError={onError}
-        />
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Endpoints</h2>
-          </div>
-          {apis.length ? (
-            <div className="api-list">
-              {apis.map((api) => (
-                <div
-                  className={`api-row ${api.id === selectedApi?.id ? 'api-row-active' : ''}`}
-                  key={api.id}
-                >
-                  <button type="button" className="api-select" onClick={() => selectApi(api.id)}>
-                    <span className={`method method-${api.method.toLowerCase()}`}>
-                      {api.method}
-                    </span>
-                    <code>{api.path}</code>
-                    <span>{api.isPublished ? 'Published' : 'Draft'}</span>
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await client.updateApi(api.id, { isPublished: !api.isPublished });
-                        await refreshProject();
-                        notify(api.isPublished ? 'Endpoint unpublished.' : 'Endpoint published.');
-                      } catch (cause) {
-                        onError(cause);
-                      }
-                    }}
-                  >
-                    {api.isPublished ? 'Unpublish' : 'Publish'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              title="No endpoints"
-              description="Create an API draft to define a mock endpoint."
-            />
-          )}
-        </section>
-        {selectedApi && (
-          <ScenarioEditor
-            api={selectedApi}
-            scenarios={scenarios}
-            client={client}
-            onSaved={async () => {
-              await refreshProject();
-              notify('Scenario saved.');
-            }}
-            onError={onError}
-            project={project}
-          />
-        )}
-      </>
-    );
-  if (view === 'environments')
-    return (
-      <>
-        <CreateEnvironment
-          project={project}
-          client={client}
-          onSaved={async () => {
-            await refreshProject();
-            notify('Environment created.');
-          }}
-          onError={onError}
-        />
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Environments</h2>
-          </div>
-          {environments.length ? (
-            <div className="data-list">
-              {environments.map((item) => (
-                <div className="data-row" key={item.id}>
-                  <strong>{item.name}</strong>
-                  <span>Scenario overrides are configured per endpoint.</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              title="No environments"
-              description="Create an environment to prepare scenario overrides."
-            />
-          )}
-        </section>
-      </>
-    );
-  return (
-    <RequestHistoryPanel
-      project={project}
-      initialLogs={requestLogs}
-      client={client}
-      onError={onError}
-    />
-  );
-}
-
-function CreateProject({
-  client,
-  onSaved,
-  onError,
-}: {
-  client: ControlPlaneClient;
-  onSaved: () => Promise<void>;
-  onError: (cause: unknown) => void;
-}) {
-  return (
-    <FormPanel
-      title="New project"
-      onSubmit={async (form) => {
-        try {
-          await client.createProject({
-            name: String(form.get('name')),
-            slug: String(form.get('slug')),
-          });
-          await onSaved();
-        } catch (cause) {
-          onError(cause);
-        }
-      }}
-    >
-      <label>
-        Name
-        <input name="name" required maxLength={120} />
-      </label>
-      <label>
-        Slug
-        <input name="slug" required pattern="[a-z0-9-]+" maxLength={120} />
-      </label>
-      <button className="button button-primary">Create project</button>
-    </FormPanel>
-  );
-}
-function CreateApi({
-  project,
-  client,
-  onSaved,
-  onError,
-}: {
-  project: Project;
-  client: ControlPlaneClient;
-  onSaved: () => Promise<void>;
-  onError: (cause: unknown) => void;
-}) {
-  return (
-    <FormPanel
-      title="New endpoint"
-      id="create-api"
-      onSubmit={async (form) => {
-        try {
-          await client.createApi(project.id, {
-            name: String(form.get('name')),
-            method: String(form.get('method')),
-            path: String(form.get('path')),
-            description: String(form.get('description')) || undefined,
-          });
-          await onSaved();
-        } catch (cause) {
-          onError(cause);
-        }
-      }}
-    >
-      <label>
-        Name
-        <input name="name" required maxLength={120} />
-      </label>
-      <label>
-        Method
-        <select name="method">
-          {methods.map((method) => (
-            <option key={method}>{method}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Path
-        <input name="path" required pattern="/.*" placeholder="/users" />
-      </label>
-      <label>
-        Description
-        <input name="description" maxLength={500} />
-      </label>
-      <button className="button button-primary">Create draft</button>
-    </FormPanel>
-  );
-}
-function CreateEnvironment({
-  project,
-  client,
-  onSaved,
-  onError,
-}: {
-  project: Project;
-  client: ControlPlaneClient;
-  onSaved: () => Promise<void>;
-  onError: (cause: unknown) => void;
-}) {
-  return (
-    <FormPanel
-      title="New environment"
-      onSubmit={async (form) => {
-        try {
-          await client.createEnvironment(project.id, String(form.get('name')));
-          await onSaved();
-        } catch (cause) {
-          onError(cause);
-        }
-      }}
-    >
-      <label>
-        Name
-        <input name="name" required maxLength={120} placeholder="Staging" />
-      </label>
-      <button className="button button-primary">Create environment</button>
-    </FormPanel>
-  );
-}
-function ScenarioEditor({
-  api,
-  scenarios,
-  client,
-  onSaved,
-  onError,
-  project,
-}: {
-  api: ApiDefinition;
-  scenarios: Scenario[];
-  client: ControlPlaneClient;
-  onSaved: () => Promise<void>;
-  onError: (cause: unknown) => void;
-  project: Project;
-}) {
-  return (
-    <>
-      <section className="panel">
-        <div className="panel-header">
-          <h2>
-            Scenarios for <code>{api.path}</code>
-          </h2>
-        </div>
-        {scenarios.length ? (
-          <div className="data-list">
-            {scenarios.map((item) => (
-              <div className="data-row" key={item.id}>
-                <strong>{item.name}</strong>
-                <span>
-                  {item.statusCode} · {item.isDefault ? 'Default' : item.type}
-                </span>
+      <main>
+        <section className="hero-section">
+          <div className="hero-inner">
+            <div className="hero-copy">
+              <p className="hero-eyebrow">Mock API Control Plane &amp; Runtime</p>
+              <h1>Ship frontend and integrations without waiting on a backend.</h1>
+              <p className="hero-lead">
+                MockFlow lets developers create, configure, publish, and test scenario-driven mock
+                APIs with isolated project URLs, environment overrides, and redacted request logs.
+              </p>
+              <div className="hero-ctas">
+                <Link href="/signup" className="button button-primary button-lg">
+                  Get started
+                </Link>
+                <Link href="/signin" className="button button-secondary button-lg">
+                  Sign in
+                </Link>
+                <a href="#capabilities" className="button button-ghost button-lg">
+                  Explore capabilities
+                </a>
               </div>
-            ))}
-          </div>
-        ) : (
-          <Empty
-            title="No response scenarios"
-            description="Add at least one scenario before publishing this endpoint."
-          />
-        )}
-      </section>
-      <FormPanel
-        title="Add scenario"
-        onSubmit={async (form) => {
-          try {
-            const body = String(form.get('body'));
-            await client.createScenario(api.id, {
-              name: String(form.get('name')),
-              type: 'SUCCESS',
-              statusCode: Number(form.get('statusCode')),
-              headers: { 'content-type': 'application/json' },
-              body: body ? JSON.parse(body) : null,
-              delayMs: 0,
-              isDefault: scenarios.length === 0,
-            });
-            await onSaved();
-          } catch (cause) {
-            onError(cause);
-          }
-        }}
-      >
-        <label>
-          Name
-          <input name="name" required defaultValue="Default response" />
-        </label>
-        <label>
-          Status
-          <input name="statusCode" type="number" defaultValue="200" min="100" max="599" required />
-        </label>
-        <label className="field-wide">
-          JSON body
-          <textarea name="body" rows={5} placeholder='{"ok": true}' />
-        </label>
-        <button className="button button-primary">Save scenario</button>
-        <button
-          className="button button-secondary"
-          type="button"
-          onClick={async () => {
-            try {
-              const response = await fetch(`/runtime/p/${project.slug}${api.path}`, {
-                method: api.method,
-              });
-              const text = await response.text();
-              alert(`${response.status}\n${text}`);
-            } catch {
-              onError(new Error('Could not reach the mock runtime.'));
-            }
-          }}
-        >
-          Test endpoint
-        </button>
-      </FormPanel>
-    </>
-  );
-}
-function FormPanel({
-  title,
-  children,
-  onSubmit,
-  id,
-}: {
-  title: string;
-  children: React.ReactNode;
-  onSubmit: (form: FormData) => Promise<void>;
-  id?: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <section className="panel form-panel" id={id}>
-      <div className="panel-header">
-        <h2>{title}</h2>
-      </div>
-      <form
-        className="form-grid"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setBusy(true);
-          await onSubmit(new FormData(event.currentTarget));
-          setBusy(false);
-        }}
-      >
-        <div className="form-fields">{children}</div>
-        {busy && <span className="form-busy">Saving…</span>}
-      </form>
-    </section>
-  );
-}
-function Setting({
-  title,
-  description,
-  action,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  action?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <div className="setting-row">
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-      {action && (
-        <button className="button button-secondary" type="button" onClick={onClick}>
-          {action}
-        </button>
-      )}
-    </div>
-  );
-}
-function RequestHistoryPanel({
-  project,
-  initialLogs,
-  client,
-  onError,
-}: {
-  project: Project;
-  initialLogs: RequestLog[];
-  client: ControlPlaneClient;
-  onError: (cause: unknown) => void;
-}) {
-  const [logs, setLogs] = useState(initialLogs);
-  const [method, setMethod] = useState('');
-  const [status, setStatus] = useState('');
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(initialLogs.length);
-  async function load(nextPage = page) {
-    try {
-      const result = await client.requestHistory(project.id, {
-        page: nextPage,
-        method,
-        statusCode: status,
-      });
-      setLogs(result.data);
-      setTotal(result.pagination.total);
-      setPage(result.pagination.page);
-    } catch (cause) {
-      onError(cause);
-    }
-  }
-  return (
-    <section className="panel">
-      <div className="panel-header">
-        <h2>Request history</h2>
-      </div>
-      <div className="filter-row">
-        <select value={method} onChange={(event) => setMethod(event.target.value)}>
-          <option value="">All methods</option>
-          {methods.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">All status codes</option>
-          <option value="200">200</option>
-          <option value="201">201</option>
-          <option value="400">400</option>
-          <option value="404">404</option>
-          <option value="500">500</option>
-        </select>
-        <button className="button button-secondary" type="button" onClick={() => load(1)}>
-          Apply
-        </button>
-      </div>
-      {logs.length ? (
-        <div className="data-list">
-          {logs.map((entry) => (
-            <div className="data-row" key={entry.id}>
-              <span className={`method method-${entry.method.toLowerCase()}`}>{entry.method}</span>
-              <strong>{entry.path}</strong>
-              <span>
-                {entry.statusCode} · {entry.durationMs} ms
-              </span>
-              <span>{new Date(entry.createdAt).toLocaleString()}</span>
             </div>
-          ))}
+
+            <div className="hero-preview panel" aria-label="MockFlow endpoint preview">
+              <div className="panel-header preview-header">
+                <span className="preview-title">
+                  <span className="method method-get">GET</span>
+                  <code>/v1/orders</code>
+                </span>
+                <span className="status-pill status-pill-published">Published</span>
+              </div>
+              <div className="preview-body">
+                <div className="preview-meta">
+                  <span>
+                    Runtime: <code>/runtime/p/checkout-api/v1/orders</code>
+                  </span>
+                  <span>
+                    Environment: <code>Staging</code>
+                  </span>
+                </div>
+                <div className="preview-scenarios">
+                  <div className="preview-scenario preview-scenario-active">
+                    <strong>Default response</strong>
+                    <span>200 · SUCCESS · 0 ms</span>
+                  </div>
+                  <div className="preview-scenario">
+                    <strong>Empty list</strong>
+                    <span>200 · EMPTY · 120 ms</span>
+                  </div>
+                  <div className="preview-scenario">
+                    <strong>Unauthorized</strong>
+                    <span>401 · UNAUTHORIZED · 0 ms</span>
+                  </div>
+                </div>
+                <pre className="preview-code">
+                  <code>{`{
+  "orders": [
+    { "id": "ord_1042", "status": "paid", "total": 4900 }
+  ],
+  "hasMore": false
+}`}</code>
+                </pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="capabilities" className="landing-section">
+          <div className="section-inner">
+            <div className="section-heading">
+              <h2>Everything you need to mock and verify APIs</h2>
+              <p>
+                Built around a Fastify control plane, a dedicated mock runtime, and a PostgreSQL-backed
+                configuration store.
+              </p>
+            </div>
+            <div className="capabilities-grid">
+              {capabilities.map((item) => (
+                <article className="panel capability-card" key={item.title}>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="workflow" className="landing-section landing-section-alt">
+          <div className="section-inner">
+            <div className="section-heading">
+              <h2>From draft to hosted mock in four steps</h2>
+              <p>A predictable workflow designed for local development and team collaboration.</p>
+            </div>
+            <div className="workflow-steps">
+              <div className="panel workflow-step">
+                <span className="step-index">1</span>
+                <h3>Create a project</h3>
+                <p>Pick a project name and unique URL slug to scope your endpoints and logs.</p>
+              </div>
+              <div className="panel workflow-step">
+                <span className="step-index">2</span>
+                <h3>Define endpoints &amp; scenarios</h3>
+                <p>Add HTTP routes and configure status codes, headers, JSON bodies, and delays.</p>
+              </div>
+              <div className="panel workflow-step">
+                <span className="step-index">3</span>
+                <h3>Publish &amp; override</h3>
+                <p>Publish endpoints to the runtime and optionally map environment overrides.</p>
+              </div>
+              <div className="panel workflow-step">
+                <span className="step-index">4</span>
+                <h3>Test &amp; inspect history</h3>
+                <p>Execute live requests in the dashboard and review redacted request history.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="extension" className="landing-section">
+          <div className="section-inner extension-grid">
+            <div>
+              <p className="hero-eyebrow">Editor Integration</p>
+              <h2>MockFlow VS Code Extension</h2>
+              <p className="extension-lead">
+                Keep API discovery and mock configuration close to your code. The MockFlow VS Code
+                extension is included in this monorepo at <code>apps/vscode-extension</code> and
+                connects directly to your control-plane and runtime servers.
+              </p>
+              <ul className="extension-list">
+                {extensionFeatures.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <div className="hero-ctas">
+                <Link href="/signup" className="button button-primary">
+                  Create an account to connect
+                </Link>
+                <Link href="/signin" className="button button-secondary">
+                  Sign in to dashboard
+                </Link>
+              </div>
+            </div>
+
+            <div className="panel extension-card">
+              <div className="panel-header">
+                <h3>Included Extension Commands</h3>
+              </div>
+              <div className="extension-commands">
+                <div className="extension-cmd">
+                  <code>MockFlow: Scan Workspace for APIs</code>
+                  <span>Discover routes in your repository</span>
+                </div>
+                <div className="extension-cmd">
+                  <code>MockFlow: Review Discovery</code>
+                  <span>Promote discovered routes into drafts</span>
+                </div>
+                <div className="extension-cmd">
+                  <code>MockFlow: Edit Endpoint &amp; Scenarios</code>
+                  <span>Update responses and request schemas</span>
+                </div>
+                <div className="extension-cmd">
+                  <code>MockFlow: Publish / Unpublish Endpoint</code>
+                  <span>Toggle live runtime availability</span>
+                </div>
+                <div className="extension-cmd">
+                  <code>MockFlow: Copy Hosted URL</code>
+                  <span>Copy the runtime endpoint URL</span>
+                </div>
+                <div className="extension-cmd">
+                  <code>MockFlow: Test Published Endpoint</code>
+                  <span>Run quick runtime checks from VS Code</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-cta-band">
+          <div className="section-inner cta-band-inner">
+            <div>
+              <h2>Ready to start mocking?</h2>
+              <p>Create an account or sign in to open your MockFlow workspace dashboard.</p>
+            </div>
+            <div className="hero-ctas">
+              <Link href="/signup" className="button button-primary button-lg">
+                Create free account
+              </Link>
+              <Link href="/signin" className="button button-secondary button-lg">
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="public-footer">
+        <div className="public-footer-inner">
+          <div>
+            <strong>MockFlow</strong>
+            <p className="footer-note">
+              Monorepo workspace: control plane (<code>apps/api</code>), runtime (
+              <code>apps/runtime</code>), web UI (<code>apps/web</code>), and VS Code extension (
+              <code>apps/vscode-extension</code>).
+            </p>
+          </div>
+          <div className="footer-links">
+            <a href="#capabilities">Capabilities</a>
+            <a href="#workflow">Workflow</a>
+            <a href="#extension">VS Code Extension</a>
+            <Link href="/signin">Sign in</Link>
+            <Link href="/signup">Sign up</Link>
+          </div>
         </div>
-      ) : (
-        <Empty
-          title="No request history"
-          description="Published endpoint traffic will appear here with sensitive headers redacted."
-        />
-      )}
-      <div className="pagination">
-        <span>{total} requests</span>
-        <div>
-          <button
-            className="button button-secondary"
-            disabled={page === 1}
-            type="button"
-            onClick={() => load(page - 1)}
-          >
-            Previous
-          </button>
-          <button
-            className="button button-secondary"
-            disabled={logs.length < 20}
-            type="button"
-            onClick={() => load(page + 1)}
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
-function Empty({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="empty-state">
-      <div className="empty-mark">⌘</div>
-      <h3>{title}</h3>
-      <p>{description}</p>
+      </footer>
     </div>
   );
-}
-function NavGlyph({ name }: { name: string }) {
-  return (
-    <span aria-hidden="true" className="nav-glyph">
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-function MenuGlyph() {
-  return <span aria-hidden="true">☰</span>;
-}
-function SunGlyph() {
-  return <span aria-hidden="true">☼</span>;
-}
-function MoonGlyph() {
-  return <span aria-hidden="true">◐</span>;
 }
