@@ -89,6 +89,9 @@ export class ControlPlaneClient {
       { method: 'POST', body: JSON.stringify({ email, password, displayName }) },
     );
   }
+  me() {
+    return this.request<{ id: string; email: string }>('/v1/auth/me');
+  }
   projects() {
     return this.request<Project[]>('/v1/projects?page=1&pageSize=100');
   }

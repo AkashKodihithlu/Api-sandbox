@@ -10,6 +10,13 @@ import {
   RequestLog,
   Scenario,
 } from './lib/control-plane';
+import {
+  clearStoredSession,
+  getPasswordMinLength,
+  readStoredSession,
+  validateStoredSession,
+  writeStoredSession,
+} from './lib/session';
 
 type View = 'overview' | 'apis' | 'environments' | 'requests' | 'settings';
 type Theme = 'light' | 'dark';
@@ -49,6 +56,7 @@ export default function HomePage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionChecking, setSessionChecking] = useState(true);
 
   const client = useMemo(() => new ControlPlaneClient(token ?? undefined), [token]);
   const project = projects.find((item) => item.id === projectId);
@@ -99,23 +107,72 @@ export default function HomePage() {
       handleError(cause);
     }
   }
+  function resetSessionState(options: {
+    noticeMessage?: string | null;
+    errorMessage?: string | null;
+  }) {
+    clearStoredSession(localStorage);
+    setToken(null);
+    setEmail('');
+    setProjects([]);
+    setProjectId('');
+    setApis([]);
+    setEnvironments([]);
+    setRequestLogs([]);
+    setSelectedApiId('');
+    setScenarios([]);
+    setNotice(options.noticeMessage ?? null);
+    setError(options.errorMessage ?? null);
+  }
+
   function handleError(cause: unknown) {
+    if (cause instanceof ControlPlaneError && cause.status === 401 && token) {
+      resetSessionState({ errorMessage: 'Your session has expired. Please sign in again.' });
+      return;
+    }
     setError(
       cause instanceof ControlPlaneError ? cause.message : 'Could not reach the control plane.',
     );
   }
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('mockflow.session.token');
-    const storedEmail = localStorage.getItem('mockflow.session.email');
-    if (storedToken) {
-      setToken(storedToken);
-      setEmail(storedEmail ?? '');
-    }
+    let active = true;
     const initial = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
     const saved = localStorage.getItem('mockflow.theme') as Theme | null;
     updateTheme(saved ?? initial);
     setTheme(saved ?? initial);
+
+    const stored = readStoredSession(localStorage);
+    if (stored.token) {
+      const candidateToken = stored.token;
+      void validateStoredSession(new ControlPlaneClient(candidateToken), localStorage).then(
+        (result) => {
+          if (!active) return;
+          if (result.valid) {
+            setToken(candidateToken);
+            setEmail(result.email || stored.email);
+            setError(null);
+          } else if (result.reason === 'unauthorized') {
+            // An invalid/expired token is cleared by validateStoredSession.
+            resetSessionState({ errorMessage: result.message });
+          } else {
+            // Preserve credentials when verification failed for a transient reason.
+            setError(result.message);
+            setNotice(null);
+          }
+          setSessionChecking(false);
+        },
+      ).catch((cause: unknown) => {
+        if (!active) return;
+        setError(cause instanceof Error ? cause.message : 'Could not verify your session.');
+        setSessionChecking(false);
+      });
+    } else {
+      setSessionChecking(false);
+    }
+    return () => {
+      active = false;
+    };
   }, []);
   useEffect(() => {
     if (token) void loadProjects(new ControlPlaneClient(token));
@@ -133,15 +190,7 @@ export default function HomePage() {
     setTheme(next);
   }
   function signOut() {
-    localStorage.removeItem('mockflow.session.token');
-    localStorage.removeItem('mockflow.session.email');
-    setToken(null);
-    setEmail('');
-    setProjects([]);
-    setProjectId('');
-    setApis([]);
-    setEnvironments([]);
-    setNotice('Signed out.');
+    resetSessionState({ noticeMessage: 'Signed out.' });
   }
 
   return (
@@ -257,14 +306,22 @@ export default function HomePage() {
               {error}
             </p>
           )}
-          {!token ? (
+          {sessionChecking ? (
+            <section className="panel" role="status">
+              <Empty title="Checking session" description="Verifying your saved session with the control plane…" />
+            </section>
+          ) : !token ? (
             <AuthPanel
               onAuthenticated={(value, signedInEmail) => {
-                localStorage.setItem('mockflow.session.token', value);
-                localStorage.setItem('mockflow.session.email', signedInEmail);
+                writeStoredSession(localStorage, value, signedInEmail);
+                setError(null);
                 setToken(value);
                 setEmail(signedInEmail);
                 setNotice('Signed in.');
+              }}
+              onClearMessages={() => {
+                setError(null);
+                setNotice(null);
               }}
               onError={handleError}
             />
@@ -303,15 +360,18 @@ export default function HomePage() {
 
 function AuthPanel({
   onAuthenticated,
+  onClearMessages,
   onError,
 }: {
   onAuthenticated: (token: string, email: string) => void;
+  onClearMessages: () => void;
   onError: (cause: unknown) => void;
 }) {
   const [register, setRegister] = useState(false);
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onClearMessages();
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email'));
@@ -319,12 +379,12 @@ function AuthPanel({
       const client = new ControlPlaneClient();
       const session = register
         ? await client.register(
-            email,
-            String(form.get('password')),
-            String(form.get('displayName')),
-          )
+          email,
+          String(form.get('password')),
+          String(form.get('displayName')),
+        )
         : await client.signIn(email, String(form.get('password')));
-      onAuthenticated(session.token, email);
+      onAuthenticated(session.token, session.user.email || email);
     } catch (cause) {
       onError(cause);
     } finally {
@@ -349,7 +409,13 @@ function AuthPanel({
         </label>
         <label>
           Password
-          <input name="password" type="password" required minLength={12} />
+          <input
+            name="password"
+            type="password"
+            required
+            minLength={getPasswordMinLength(register)}
+            maxLength={256}
+          />
         </label>
         <div className="form-actions">
           <button className="button button-primary" disabled={busy}>
@@ -358,7 +424,10 @@ function AuthPanel({
           <button
             className="button button-secondary"
             type="button"
-            onClick={() => setRegister(!register)}
+            onClick={() => {
+              onClearMessages();
+              setRegister(!register);
+            }}
           >
             {register ? 'Use existing account' : 'Create account'}
           </button>
