@@ -132,3 +132,30 @@ During final verification, I initially encountered integration tests that were s
 I conducted a final read-only code review of the Phase 6 implementation. No critical or high-severity issues or security vulnerabilities were identified. The review identified a non-blocking functional limitation in the VS Code scenario-creation workflow, where newly created scenarios are currently assigned the `SUCCESS` type, along with minor tree-refresh and publishing/default-scenario observations that were documented as follow-up considerations.
 
 The Phase 6 implementation, integration testing, validation, and documentation are now ready for the milestone commit on the `feat/phase-6-mock-generation-publishing` branch.
+
+
+## Phase 7 — Web Platform and Extension Distribution
+
+
+
+[Teammate's implementation details, testing, challenges, and commit references to be documented here.]
+
+
+
+Commits: `516acf6`, `e771834`, `57029d1`
+
+In Phase 7, I worked on improving the MockFlow web platform, refining its public-facing presentation, improving responsive layouts and theme support, and implementing direct distribution of the VS Code extension through the website.
+
+I redesigned the homepage to improve its visual hierarchy, presentation, and user experience. I refined the responsive layouts for desktop and mobile devices, improved light and dark theme support, and updated navigation, branding, reusable components, and footer components. I also introduced dedicated public-facing pages for Capabilities, Workflow, and the VS Code Extension, separating the platform's information into clearer sections instead of presenting everything through a single landing page.
+
+The Capabilities page presents the platform's functionality, while the Workflow page explains how MockFlow operates. The Extension page provides extension details, installation instructions, configuration guidance, troubleshooting information, and access to the downloadable extension package.
+
+I also implemented extension packaging using `@vscode/vsce` and added the packaging script at `apps/vscode-extension/scripts/package-vsix.mjs`. The generated VSIX artifact, `mockflow-vscode-extension-0.1.0.vsix`, was included in the web application's public downloads directory at `apps/web/public/downloads/`. This allows users to download the extension directly through the website without requiring authentication. The extension is currently distributed through direct VSIX downloads and has not yet been published to the VS Code Marketplace.
+
+During development, I identified API and Runtime environment-loading issues when running the services through `tsx`. The root `.env` file was not being loaded reliably by these processes. I addressed this by explicitly loading the environment file in the API and Runtime server entry points while retaining the existing Zod-based environment validation.
+
+I verified the implementation through API, Runtime, and Web typechecks, 11/11 web unit tests, a successful Next.js production build, and Playwright-based visual and route checks. These checks included desktop and mobile layouts, light and dark themes, and public extension download verification. Full end-to-end verification with all services running simultaneously was not completed and remains a follow-up.
+
+Existing API contracts, database schemas, authentication logic, runtime behavior, and extension business logic were preserved.
+
+The Phase 7 web redesign and extension distribution implementation was committed as `57029d1` (`feat: redesign web platform and distribute VS Code extension`) on the `feat/web-visual-polish` branch.
